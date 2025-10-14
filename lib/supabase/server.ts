@@ -3,13 +3,13 @@
 // 서버 액션에서 사용할 Supabase 클라이언트를 생성
 // 관련 파일: .env.local, app/actions/auth.ts, lib/supabase/client.ts
 
-import { createServerClient } from '@supabase/ssr'
+import { createServerClient as createServerClientFromSSR } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 
 export const createClient = async () => {
   const cookieStore = await cookies()
 
-  return createServerClient(
+  return createServerClientFromSSR(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
@@ -32,3 +32,5 @@ export const createClient = async () => {
     }
   )
 }
+
+export const createServerClient = createClient

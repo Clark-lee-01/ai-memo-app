@@ -5,7 +5,7 @@
 'use client';
 
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
-import { createBrowserClient } from '@/lib/supabase/client';
+import { createClient as createBrowserClient } from '@/lib/supabase/client';
 import { AuthUser, AuthContextType, AuthState } from '@/lib/types/auth';
 import { extractSessionInfo, isSessionExpiringSoon } from '@/lib/utils/session';
 
