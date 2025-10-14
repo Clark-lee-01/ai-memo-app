@@ -2,9 +2,9 @@
 // 노트 Server Actions 테스트 - 노트 CRUD 액션 테스트
 // AI 메모장 프로젝트의 노트 액션 테스트
 
-import { createNote, getNote, getNotes, updateNote, deleteNote } from '@/app/actions/notes';
+import { createNote, getNote, getNotes, updateNote, deleteNote, generateNoteTags, getNoteTags } from '@/app/actions/notes';
 import { db } from '@/lib/db';
-import { notes } from '@/lib/drizzle/schema';
+import { notes, noteTags } from '@/lib/drizzle/schema';
 
 // Supabase 클라이언트 모킹
 const mockGetUser = jest.fn();
@@ -40,11 +40,24 @@ jest.mock('next/navigation', () => ({
   redirect: jest.fn(),
 }));
 
+// Gemini API 모킹
+jest.mock('@/lib/ai/gemini', () => ({
+  generateTags: jest.fn(),
+  GeminiAPIError: class GeminiAPIError extends Error {
+    constructor(message: string, code?: string, statusCode?: number) {
+      super(message);
+      this.name = 'GeminiAPIError';
+      this.code = code;
+      this.statusCode = statusCode;
+    }
+  },
+}));
+
 const mockDb = db as any;
 
 describe('Notes Actions', () => {
   const mockUser = {
-    id: 'test-user-id',
+    id: '550e8400-e29b-41d4-a716-446655440000',
     email: 'test@example.com',
   };
 
@@ -60,7 +73,7 @@ describe('Notes Actions', () => {
 
   describe('createNote', () => {
     it('should create note successfully', async () => {
-      const mockNote = { id: 'test-note-id' };
+      const mockNote = { id: '550e8400-e29b-41d4-a716-446655440001' };
       
       // 사용자 조회 모킹
       mockDb.select.mockReturnValue({
@@ -85,7 +98,7 @@ describe('Notes Actions', () => {
       const result = await createNote(formData);
 
       expect(result.success).toBe(true);
-      expect(result.noteId).toBe('test-note-id');
+      expect(result.noteId).toBe('550e8400-e29b-41d4-a716-446655440001');
     });
 
     it('should return error when user is not authenticated', async () => {
@@ -133,7 +146,7 @@ describe('Notes Actions', () => {
   describe('getNote', () => {
     it('should get note successfully', async () => {
       const mockNote = {
-        id: 'test-note-id',
+        id: '550e8400-e29b-41d4-a716-446655440001',
         title: 'Test Title',
         content: 'Test Content',
         userId: 'test-user-id',
@@ -147,7 +160,7 @@ describe('Notes Actions', () => {
         }),
       });
 
-      const result = await getNote('test-note-id');
+      const result = await getNote('550e8400-e29b-41d4-a716-446655440001');
 
       expect(result).toEqual(mockNote);
     });
@@ -158,7 +171,7 @@ describe('Notes Actions', () => {
         error: new Error('Not authenticated'),
       });
 
-      await expect(getNote('test-note-id')).rejects.toThrow('로그인이 필요합니다');
+      await expect(getNote('550e8400-e29b-41d4-a716-446655440001')).rejects.toThrow('로그인이 필요합니다');
     });
 
     it('should throw error when note is not found', async () => {
@@ -170,7 +183,7 @@ describe('Notes Actions', () => {
         }),
       });
 
-      await expect(getNote('test-note-id')).rejects.toThrow('노트를 찾을 수 없습니다');
+      await expect(getNote('550e8400-e29b-41d4-a716-446655440001')).rejects.toThrow('노트를 찾을 수 없습니다');
     });
   });
 
@@ -221,7 +234,7 @@ describe('Notes Actions', () => {
   describe('updateNote', () => {
     it('should update note successfully', async () => {
       const mockUpdatedNote = {
-        id: 'test-note-id',
+        id: '550e8400-e29b-41d4-a716-446655440001',
         title: 'Updated Title',
         content: 'Updated Content',
         userId: 'test-user-id',
@@ -231,7 +244,7 @@ describe('Notes Actions', () => {
       mockDb.select.mockReturnValue({
         from: jest.fn().mockReturnValue({
           where: jest.fn().mockReturnValue({
-            limit: jest.fn().mockResolvedValue([{ id: 'test-note-id', userId: 'test-user-id' }]),
+            limit: jest.fn().mockResolvedValue([{ id: '550e8400-e29b-41d4-a716-446655440001', userId: 'test-user-id' }]),
           }),
         }),
       });
@@ -249,7 +262,7 @@ describe('Notes Actions', () => {
       formData.append('title', 'Updated Title');
       formData.append('content', 'Updated Content');
 
-      const result = await updateNote('test-note-id', formData);
+      const result = await updateNote('550e8400-e29b-41d4-a716-446655440001', formData);
 
       expect(result).toEqual(mockUpdatedNote);
     });
@@ -266,7 +279,7 @@ describe('Notes Actions', () => {
       const formData = new FormData();
       formData.append('title', 'Updated Title');
 
-      await expect(updateNote('test-note-id', formData)).rejects.toThrow('노트를 찾을 수 없습니다');
+      await expect(updateNote('550e8400-e29b-41d4-a716-446655440001', formData)).rejects.toThrow('노트를 찾을 수 없습니다');
     });
   });
 
@@ -276,7 +289,7 @@ describe('Notes Actions', () => {
       mockDb.select.mockReturnValue({
         from: jest.fn().mockReturnValue({
           where: jest.fn().mockReturnValue({
-            limit: jest.fn().mockResolvedValue([{ id: 'test-note-id', userId: 'test-user-id' }]),
+            limit: jest.fn().mockResolvedValue([{ id: '550e8400-e29b-41d4-a716-446655440001', userId: 'test-user-id' }]),
           }),
         }),
       });
@@ -286,7 +299,7 @@ describe('Notes Actions', () => {
         where: jest.fn().mockResolvedValue(undefined),
       });
 
-      await deleteNote('test-note-id');
+      await deleteNote('550e8400-e29b-41d4-a716-446655440001');
 
       expect(mockDb.delete).toHaveBeenCalled();
     });
@@ -300,7 +313,279 @@ describe('Notes Actions', () => {
         }),
       });
 
-      await expect(deleteNote('test-note-id')).rejects.toThrow('노트를 찾을 수 없습니다');
+      await expect(deleteNote('550e8400-e29b-41d4-a716-446655440001')).rejects.toThrow('노트를 찾을 수 없습니다');
+    });
+  });
+
+  describe('generateNoteTags', () => {
+    const { generateTags } = require('@/lib/ai/gemini');
+    const mockNoteId = '550e8400-e29b-41d4-a716-446655440001';
+    const mockTags = ['태그1', '태그2', '태그3'];
+
+    beforeEach(() => {
+      jest.clearAllMocks();
+      mockGetUser.mockResolvedValue({
+        data: { user: mockUser },
+        error: null,
+      });
+    });
+
+    it('should generate tags successfully', async () => {
+      const mockNote = {
+        id: mockNoteId,
+        userId: mockUser.id,
+        title: 'Test Note',
+        content: 'Test content for tag generation',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      mockDb.select.mockReturnValue({
+        from: jest.fn().mockReturnValue({
+          where: jest.fn().mockReturnValue({
+            limit: jest.fn().mockResolvedValue([mockNote]),
+          }),
+        }),
+      });
+
+      mockDb.select.mockReturnValueOnce({
+        from: jest.fn().mockReturnValue({
+          where: jest.fn().mockResolvedValue([]),
+        }),
+      });
+
+      generateTags.mockResolvedValue(mockTags);
+
+      mockDb.insert.mockReturnValue({
+        values: jest.fn().mockResolvedValue([]),
+      });
+
+      const result = await generateNoteTags(mockNoteId);
+
+      expect(result.success).toBe(true);
+      expect(result.tags).toEqual(mockTags);
+      expect(generateTags).toHaveBeenCalledWith(mockNote.content);
+      expect(mockDb.insert).toHaveBeenCalled();
+    });
+
+    it('should return error when user is not authenticated', async () => {
+      mockGetUser.mockResolvedValue({
+        data: { user: null },
+        error: new Error('Not authenticated'),
+      });
+
+      const result = await generateNoteTags(mockNoteId);
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBe('로그인이 필요합니다');
+    });
+
+    it('should return error when note is not found', async () => {
+      mockDb.select.mockReturnValue({
+        from: jest.fn().mockReturnValue({
+          where: jest.fn().mockReturnValue({
+            limit: jest.fn().mockResolvedValue([]),
+          }),
+        }),
+      });
+
+      const result = await generateNoteTags(mockNoteId);
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBe('노트를 찾을 수 없습니다');
+    });
+
+    it('should return error when note content is empty', async () => {
+      const mockNote = {
+        id: mockNoteId,
+        userId: mockUser.id,
+        title: 'Test Note',
+        content: '',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      mockDb.select.mockReturnValue({
+        from: jest.fn().mockReturnValue({
+          where: jest.fn().mockReturnValue({
+            limit: jest.fn().mockResolvedValue([mockNote]),
+          }),
+        }),
+      });
+
+      const result = await generateNoteTags(mockNoteId);
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBe('태그를 생성할 내용이 없습니다. 노트에 본문을 작성해주세요.');
+    });
+
+    it('should return error when tags already exist and overwrite is false', async () => {
+      const mockNote = {
+        id: mockNoteId,
+        userId: mockUser.id,
+        title: 'Test Note',
+        content: 'Test content',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      mockDb.select.mockReturnValue({
+        from: jest.fn().mockReturnValue({
+          where: jest.fn().mockReturnValue({
+            limit: jest.fn().mockResolvedValue([mockNote]),
+          }),
+        }),
+      });
+
+      mockDb.select.mockReturnValueOnce({
+        from: jest.fn().mockReturnValue({
+          where: jest.fn().mockResolvedValue([{ tag: 'existing-tag' }]),
+        }),
+      });
+
+      const result = await generateNoteTags(mockNoteId, false);
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBe('이미 태그가 존재합니다. 덮어쓰기를 원하시면 확인해주세요.');
+      expect(result.hasExistingTags).toBe(true);
+    });
+
+    it('should overwrite existing tags when overwrite is true', async () => {
+      const mockNote = {
+        id: mockNoteId,
+        userId: mockUser.id,
+        title: 'Test Note',
+        content: 'Test content',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      mockDb.select.mockReturnValue({
+        from: jest.fn().mockReturnValue({
+          where: jest.fn().mockReturnValue({
+            limit: jest.fn().mockResolvedValue([mockNote]),
+          }),
+        }),
+      });
+
+      mockDb.select.mockReturnValueOnce({
+        from: jest.fn().mockReturnValue({
+          where: jest.fn().mockResolvedValue([{ tag: 'existing-tag' }]),
+        }),
+      });
+
+      generateTags.mockResolvedValue(mockTags);
+
+      mockDb.delete.mockReturnValue({
+        where: jest.fn().mockResolvedValue([]),
+      });
+
+      mockDb.insert.mockReturnValue({
+        values: jest.fn().mockResolvedValue([]),
+      });
+
+      const result = await generateNoteTags(mockNoteId, true);
+
+      expect(result.success).toBe(true);
+      expect(result.tags).toEqual(mockTags);
+      expect(mockDb.delete).toHaveBeenCalled();
+      expect(mockDb.insert).toHaveBeenCalled();
+    });
+
+    it('should handle Gemini API error', async () => {
+      const mockNote = {
+        id: mockNoteId,
+        userId: mockUser.id,
+        title: 'Test Note',
+        content: 'Test content',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      mockDb.select.mockReturnValue({
+        from: jest.fn().mockReturnValue({
+          where: jest.fn().mockReturnValue({
+            limit: jest.fn().mockResolvedValue([mockNote]),
+          }),
+        }),
+      });
+
+      mockDb.select.mockReturnValueOnce({
+        from: jest.fn().mockReturnValue({
+          where: jest.fn().mockResolvedValue([]),
+        }),
+      });
+
+      const { GeminiAPIError } = require('@/lib/ai/gemini');
+      generateTags.mockRejectedValue(new GeminiAPIError('API Error', 'API_ERROR'));
+
+      const result = await generateNoteTags(mockNoteId);
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBe('AI 태그 생성 중 오류가 발생했습니다: API Error');
+    });
+  });
+
+  describe('getNoteTags', () => {
+    const mockNoteId = '550e8400-e29b-41d4-a716-446655440001';
+    const mockTags = ['태그1', '태그2', '태그3'];
+
+    beforeEach(() => {
+      jest.clearAllMocks();
+      mockGetUser.mockResolvedValue({
+        data: { user: mockUser },
+        error: null,
+      });
+    });
+
+    it('should return tags successfully', async () => {
+      const mockNote = {
+        id: mockNoteId,
+        userId: mockUser.id,
+        title: 'Test Note',
+        content: 'Test content',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      mockDb.select.mockReturnValue({
+        from: jest.fn().mockReturnValue({
+          where: jest.fn().mockReturnValue({
+            limit: jest.fn().mockResolvedValue([mockNote]),
+          }),
+        }),
+      });
+
+      mockDb.select.mockReturnValueOnce({
+        from: jest.fn().mockReturnValue({
+          where: jest.fn().mockResolvedValue(mockTags.map(tag => ({ tag }))),
+        }),
+      });
+
+      const result = await getNoteTags(mockNoteId);
+
+      expect(result).toEqual(mockTags);
+    });
+
+    it('should throw error when user is not authenticated', async () => {
+      mockGetUser.mockResolvedValue({
+        data: { user: null },
+        error: new Error('Not authenticated'),
+      });
+
+      await expect(getNoteTags(mockNoteId)).rejects.toThrow('로그인이 필요합니다');
+    });
+
+    it('should throw error when note is not found', async () => {
+      mockDb.select.mockReturnValue({
+        from: jest.fn().mockReturnValue({
+          where: jest.fn().mockReturnValue({
+            limit: jest.fn().mockResolvedValue([]),
+          }),
+        }),
+      });
+
+      await expect(getNoteTags(mockNoteId)).rejects.toThrow('노트를 찾을 수 없습니다');
     });
   });
 });

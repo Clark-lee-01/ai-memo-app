@@ -8,11 +8,11 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { createClient as createServerClient } from '@/lib/supabase/server';
 import { db } from '@/lib/db';
-import { notes, users, summaries } from '@/drizzle/schema';
+import { notes, users, summaries, noteTags } from '@/drizzle/schema';
 import { eq, and, desc, asc, ilike, count, isNull } from 'drizzle-orm';
 import { validateNoteForm, validateNoteUpdate, validateNoteId, validateNoteListOptions } from '@/lib/validations/notes';
 import { NoteCreateResult, NoteListResponse } from '@/lib/types/notes';
-import { generateSummary, GeminiAPIError } from '@/lib/ai/gemini';
+import { generateSummary, generateTags, GeminiAPIError } from '@/lib/ai/gemini';
 
 // 노트 생성
 export async function createNote(formData: FormData): Promise<NoteCreateResult> {
@@ -515,6 +515,167 @@ export async function getNoteSummary(noteId: string) {
 
   } catch (error) {
     console.error('노트 요약 조회 에러:', error);
+    throw error;
+  }
+}
+
+// 노트 태그 생성
+export async function generateNoteTags(noteId: string, overwrite: boolean = false) {
+  try {
+    // 사용자 인증 확인
+    const supabase = await createServerClient();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    
+    if (authError || !user) {
+      return {
+        success: false,
+        error: '로그인이 필요합니다'
+      };
+    }
+
+    // 노트 ID 유효성 검사
+    const idValidation = validateNoteId(noteId);
+    if (!idValidation.success) {
+      return {
+        success: false,
+        error: '유효하지 않은 노트 ID입니다'
+      };
+    }
+
+    // 노트 조회 (삭제되지 않은 노트만)
+    const [note] = await db
+      .select()
+      .from(notes)
+      .where(
+        and(
+          eq(notes.id, noteId),
+          eq(notes.userId, user.id),
+          isNull(notes.deletedAt)
+        )
+      )
+      .limit(1);
+
+    if (!note) {
+      return {
+        success: false,
+        error: '노트를 찾을 수 없습니다'
+      };
+    }
+
+    // 노트 내용이 있는지 확인
+    if (!note.content || note.content.trim().length === 0) {
+      return {
+        success: false,
+        error: '태그를 생성할 내용이 없습니다. 노트에 본문을 작성해주세요.'
+      };
+    }
+
+    // 기존 태그 확인
+    const existingTags = await db
+      .select()
+      .from(noteTags)
+      .where(eq(noteTags.noteId, noteId));
+
+    if (existingTags.length > 0 && !overwrite) {
+      return {
+        success: false,
+        error: '이미 태그가 존재합니다. 덮어쓰기를 원하시면 확인해주세요.',
+        hasExistingTags: true
+      };
+    }
+
+    // Gemini API를 사용하여 태그 생성
+    const tags = await generateTags(note.content);
+
+    // 기존 태그가 있고 덮어쓰기인 경우 삭제
+    if (existingTags.length > 0 && overwrite) {
+      await db
+        .delete(noteTags)
+        .where(eq(noteTags.noteId, noteId));
+    }
+
+    // 새 태그들을 데이터베이스에 저장
+    if (tags.length > 0) {
+      await db
+        .insert(noteTags)
+        .values(
+          tags.map(tag => ({
+            noteId: noteId,
+            tag: tag
+          }))
+        );
+    }
+
+    // 페이지 재검증
+    revalidatePath(`/notes/${noteId}`);
+
+    return {
+      success: true,
+      tags: tags,
+      message: existingTags.length > 0 ? '태그가 업데이트되었습니다' : '태그가 생성되었습니다'
+    };
+
+  } catch (error) {
+    console.error('노트 태그 생성 에러:', error);
+    
+    if (error instanceof GeminiAPIError) {
+      return {
+        success: false,
+        error: `AI 태그 생성 중 오류가 발생했습니다: ${error.message}`
+      };
+    }
+
+    return {
+      success: false,
+      error: '태그 생성 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.'
+    };
+  }
+}
+
+// 노트 태그 조회
+export async function getNoteTags(noteId: string) {
+  try {
+    // 사용자 인증 확인
+    const supabase = await createServerClient();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    
+    if (authError || !user) {
+      throw new Error('로그인이 필요합니다');
+    }
+
+    // 노트 ID 유효성 검사
+    const idValidation = validateNoteId(noteId);
+    if (!idValidation.success) {
+      throw new Error('유효하지 않은 노트 ID입니다');
+    }
+
+    // 노트 소유권 확인
+    const [note] = await db
+      .select()
+      .from(notes)
+      .where(
+        and(
+          eq(notes.id, noteId),
+          eq(notes.userId, user.id),
+          isNull(notes.deletedAt)
+        )
+      )
+      .limit(1);
+
+    if (!note) {
+      throw new Error('노트를 찾을 수 없습니다');
+    }
+
+    // 태그 조회
+    const tags = await db
+      .select()
+      .from(noteTags)
+      .where(eq(noteTags.noteId, noteId));
+
+    return tags.map(tag => tag.tag);
+
+  } catch (error) {
+    console.error('노트 태그 조회 에러:', error);
     throw error;
   }
 }
