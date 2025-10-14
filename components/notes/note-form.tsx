@@ -4,7 +4,7 @@
 
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useState, useTransition, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -13,9 +13,11 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Loader2, Save, X } from 'lucide-react';
-import { createNote } from '@/app/actions/notes';
+import { createNote, updateNote } from '@/app/actions/notes';
 import { NoteFormErrors } from '@/lib/types/notes';
 import { validateNoteForm } from '@/lib/validations/notes';
+import { useAutoSave } from '@/lib/hooks/useAutoSave';
+import { SaveStatusComponent } from '@/components/notes/save-status';
 
 interface NoteFormProps {
   initialData?: {
@@ -23,12 +25,14 @@ interface NoteFormProps {
     content?: string;
   };
   mode?: 'create' | 'edit';
+  noteId?: string; // 수정 모드일 때 노트 ID
   onCancel?: () => void;
 }
 
 export function NoteForm({ 
   initialData = { title: '', content: '' }, 
   mode = 'create',
+  noteId,
   onCancel 
 }: NoteFormProps) {
   const [title, setTitle] = useState(initialData.title || '');
@@ -36,6 +40,31 @@ export function NoteForm({
   const [errors, setErrors] = useState<NoteFormErrors>({});
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
+
+  // 자동 저장 함수 (수정 모드일 때만)
+  const handleAutoSave = useCallback(async (data: { title: string; content: string }) => {
+    if (mode === 'edit' && noteId) {
+      try {
+        const formData = new FormData();
+        formData.append('title', data.title);
+        formData.append('content', data.content);
+        
+        await updateNote(noteId, formData);
+      } catch (error) {
+        console.error('자동 저장 실패:', error);
+        throw error;
+      }
+    }
+  }, [mode, noteId]);
+
+  // 자동 저장 훅 (수정 모드일 때만 활성화)
+  const { saveStatus, hasUnsavedChanges, manualSave } = useAutoSave({
+    data: { title, content },
+    onSave: handleAutoSave,
+    debounceMs: 2000, // 타이핑 중단 후 2초
+    intervalMs: 5000, // 5초마다 주기적 저장
+    enabled: mode === 'edit' && !!noteId,
+  });
 
   // 실시간 유효성 검사
   const validateField = (field: 'title' | 'content', value: string) => {
@@ -98,13 +127,21 @@ export function NoteForm({
         formData.append('title', title);
         formData.append('content', content);
 
-        const result = await createNote(formData);
-        
-        if (!result.success) {
-          setErrors({ general: result.error });
-        } else {
+        if (mode === 'edit' && noteId) {
+          // 수정 모드
+          await updateNote(noteId, formData);
           // 성공 시 노트 상세 페이지로 리다이렉트
-          router.push(`/notes/${result.noteId}?message=노트가 성공적으로 생성되었습니다`);
+          router.push(`/notes/${noteId}?message=노트가 성공적으로 수정되었습니다`);
+        } else {
+          // 생성 모드
+          const result = await createNote(formData);
+          
+          if (!result.success) {
+            setErrors({ general: result.error });
+          } else {
+            // 성공 시 노트 목록 페이지로 리다이렉트
+            router.push('/notes');
+          }
         }
       } catch (error) {
         console.error('노트 저장 에러:', error);
@@ -117,6 +154,11 @@ export function NoteForm({
 
   // 취소 핸들러
   const handleCancel = () => {
+    if (mode === 'edit' && hasUnsavedChanges) {
+      const confirmed = window.confirm('저장되지 않은 변경사항이 있습니다. 정말로 취소하시겠습니까?');
+      if (!confirmed) return;
+    }
+    
     if (onCancel) {
       onCancel();
     } else {
@@ -127,18 +169,36 @@ export function NoteForm({
   // 폼이 변경되었는지 확인
   const hasChanges = title !== initialData.title || content !== initialData.content;
 
+  // 키보드 단축키 처리
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.ctrlKey && e.key === 's') {
+      e.preventDefault();
+      if (mode === 'edit' && hasUnsavedChanges) {
+        manualSave();
+      }
+    }
+  };
+
   return (
-    <Card className="w-full max-w-4xl mx-auto">
+    <div onKeyDown={handleKeyDown}>
+      <Card className="w-full max-w-4xl mx-auto">
       <CardHeader>
-        <CardTitle>
-          {mode === 'create' ? '새 노트 작성' : '노트 수정'}
-        </CardTitle>
-        <CardDescription>
-          {mode === 'create' 
-            ? '제목과 본문을 입력하여 새로운 노트를 작성하세요.'
-            : '노트의 제목과 본문을 수정하세요.'
-          }
-        </CardDescription>
+        <div className="flex items-center justify-between">
+          <div>
+            <CardTitle>
+              {mode === 'create' ? '새 노트 작성' : '노트 수정'}
+            </CardTitle>
+            <CardDescription>
+              {mode === 'create' 
+                ? '제목과 본문을 입력하여 새로운 노트를 작성하세요.'
+                : '노트의 제목과 본문을 수정하세요. 변경사항은 자동으로 저장됩니다.'
+              }
+            </CardDescription>
+          </div>
+          {mode === 'edit' && (
+            <SaveStatusComponent status={saveStatus} />
+          )}
+        </div>
       </CardHeader>
       
       <CardContent>
@@ -147,6 +207,15 @@ export function NoteForm({
           {errors.general && (
             <Alert variant="destructive">
               <AlertDescription>{errors.general}</AlertDescription>
+            </Alert>
+          )}
+
+          {/* 자동 저장 안내 (수정 모드일 때만) */}
+          {mode === 'edit' && (
+            <Alert>
+              <AlertDescription>
+                💡 변경사항은 자동으로 저장됩니다. 수동 저장은 Ctrl+S를 사용하세요.
+              </AlertDescription>
             </Alert>
           )}
 
@@ -198,36 +267,57 @@ export function NoteForm({
           </div>
 
           {/* 버튼 그룹 */}
-          <div className="flex justify-end space-x-3">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={handleCancel}
-              disabled={isPending}
-            >
-              <X className="w-4 h-4 mr-2" />
-              취소
-            </Button>
-            
-            <Button
-              type="submit"
-              disabled={isPending || !title.trim() || !hasChanges}
-            >
-              {isPending ? (
-                <>
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  저장 중...
-                </>
-              ) : (
-                <>
-                  <Save className="w-4 h-4 mr-2" />
-                  {mode === 'create' ? '노트 생성' : '노트 수정'}
-                </>
+          <div className="flex justify-between items-center">
+            <div className="text-sm text-gray-500">
+              {mode === 'edit' && hasUnsavedChanges && (
+                <span className="text-orange-600">⚠️ 저장되지 않은 변경사항이 있습니다</span>
               )}
-            </Button>
+            </div>
+            
+            <div className="flex space-x-3">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleCancel}
+                disabled={isPending}
+              >
+                <X className="w-4 h-4 mr-2" />
+                취소
+              </Button>
+              
+              {mode === 'edit' && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={manualSave}
+                  disabled={isPending || !hasUnsavedChanges}
+                >
+                  <Save className="w-4 h-4 mr-2" />
+                  수동 저장
+                </Button>
+              )}
+              
+              <Button
+                type="submit"
+                disabled={isPending || !title.trim() || (mode === 'create' && !hasChanges)}
+              >
+                {isPending ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    {mode === 'create' ? '생성 중...' : '수정 중...'}
+                  </>
+                ) : (
+                  <>
+                    <Save className="w-4 h-4 mr-2" />
+                    {mode === 'create' ? '노트 생성' : '수정 완료'}
+                  </>
+                )}
+              </Button>
+            </div>
           </div>
         </form>
       </CardContent>
     </Card>
+    </div>
   );
 }
