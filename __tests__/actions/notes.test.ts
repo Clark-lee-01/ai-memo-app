@@ -3,13 +3,22 @@
 // AI 메모장 프로젝트의 노트 액션 테스트
 
 import { createNote, getNote, getNotes, updateNote, deleteNote } from '@/app/actions/notes';
-import { createServerClient } from '@/lib/supabase/server';
 import { db } from '@/lib/db';
 import { notes } from '@/lib/drizzle/schema';
 
 // Supabase 클라이언트 모킹
+const mockGetUser = jest.fn();
 jest.mock('@/lib/supabase/server', () => ({
-  createServerClient: jest.fn(),
+  createClient: jest.fn(() => Promise.resolve({
+    auth: {
+      getUser: mockGetUser,
+    },
+  })),
+  createServerClient: jest.fn(() => Promise.resolve({
+    auth: {
+      getUser: mockGetUser,
+    },
+  })),
 }));
 
 // Drizzle DB 모킹
@@ -31,7 +40,6 @@ jest.mock('next/navigation', () => ({
   redirect: jest.fn(),
 }));
 
-const mockCreateServerClient = createServerClient as jest.MockedFunction<typeof createServerClient>;
 const mockDb = db as any;
 
 describe('Notes Actions', () => {
@@ -44,19 +52,26 @@ describe('Notes Actions', () => {
     jest.clearAllMocks();
     
     // 기본 인증 모킹
-    mockCreateServerClient.mockResolvedValue({
-      auth: {
-        getUser: jest.fn().mockResolvedValue({
-          data: { user: mockUser },
-          error: null,
-        }),
-      },
-    } as any);
+    mockGetUser.mockResolvedValue({
+      data: { user: mockUser },
+      error: null,
+    });
   });
 
   describe('createNote', () => {
     it('should create note successfully', async () => {
       const mockNote = { id: 'test-note-id' };
+      
+      // 사용자 조회 모킹
+      mockDb.select.mockReturnValue({
+        from: jest.fn().mockReturnValue({
+          where: jest.fn().mockReturnValue({
+            limit: jest.fn().mockResolvedValue([{ id: 'test-user-id' }]),
+          }),
+        }),
+      });
+      
+      // 노트 삽입 모킹
       mockDb.insert.mockReturnValue({
         values: jest.fn().mockReturnValue({
           returning: jest.fn().mockResolvedValue([mockNote]),
@@ -74,14 +89,10 @@ describe('Notes Actions', () => {
     });
 
     it('should return error when user is not authenticated', async () => {
-      mockCreateServerClient.mockResolvedValue({
-        auth: {
-          getUser: jest.fn().mockResolvedValue({
-            data: { user: null },
-            error: new Error('Not authenticated'),
-          }),
-        },
-      } as any);
+      mockGetUser.mockResolvedValue({
+        data: { user: null },
+        error: new Error('Not authenticated'),
+      });
 
       const formData = new FormData();
       formData.append('title', 'Test Title');
@@ -142,14 +153,10 @@ describe('Notes Actions', () => {
     });
 
     it('should throw error when user is not authenticated', async () => {
-      mockCreateServerClient.mockResolvedValue({
-        auth: {
-          getUser: jest.fn().mockResolvedValue({
-            data: { user: null },
-            error: new Error('Not authenticated'),
-          }),
-        },
-      } as any);
+      mockGetUser.mockResolvedValue({
+        data: { user: null },
+        error: new Error('Not authenticated'),
+      });
 
       await expect(getNote('test-note-id')).rejects.toThrow('로그인이 필요합니다');
     });
@@ -202,14 +209,10 @@ describe('Notes Actions', () => {
     });
 
     it('should throw error when user is not authenticated', async () => {
-      mockCreateServerClient.mockResolvedValue({
-        auth: {
-          getUser: jest.fn().mockResolvedValue({
-            data: { user: null },
-            error: new Error('Not authenticated'),
-          }),
-        },
-      } as any);
+      mockGetUser.mockResolvedValue({
+        data: { user: null },
+        error: new Error('Not authenticated'),
+      });
 
       await expect(getNotes()).rejects.toThrow('로그인이 필요합니다');
     });
