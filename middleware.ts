@@ -40,6 +40,7 @@ export async function middleware(request: NextRequest) {
   // 보호된 라우트 (인증이 필요한 페이지)
   const protectedRoutes = ['/']
   const authRoutes = ['/auth/signin', '/auth/signup']
+  const onboardingRoute = '/onboarding'
 
   const isProtectedRoute = protectedRoutes.some(route => 
     request.nextUrl.pathname === route
@@ -47,6 +48,7 @@ export async function middleware(request: NextRequest) {
   const isAuthRoute = authRoutes.some(route => 
     request.nextUrl.pathname.startsWith(route)
   )
+  const isOnboardingRoute = request.nextUrl.pathname === onboardingRoute
 
   // 인증되지 않은 사용자가 보호된 라우트에 접근하는 경우
   if (isProtectedRoute && !user) {
@@ -55,6 +57,20 @@ export async function middleware(request: NextRequest) {
 
   // 인증된 사용자가 로그인/회원가입 페이지에 접근하는 경우
   if (isAuthRoute && user) {
+    // 온보딩을 완료하지 않은 사용자는 온보딩 페이지로
+    if (!user.user_metadata?.onboarding_completed) {
+      return NextResponse.redirect(new URL('/onboarding', request.url))
+    }
+    return NextResponse.redirect(new URL('/', request.url))
+  }
+
+  // 인증된 사용자가 메인 페이지에 접근할 때 온보딩 확인
+  if (isProtectedRoute && user && !user.user_metadata?.onboarding_completed && !isOnboardingRoute) {
+    return NextResponse.redirect(new URL('/onboarding', request.url))
+  }
+
+  // 온보딩을 완료한 사용자가 온보딩 페이지에 접근하는 경우
+  if (isOnboardingRoute && user && user.user_metadata?.onboarding_completed) {
     return NextResponse.redirect(new URL('/', request.url))
   }
 
