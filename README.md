@@ -2,6 +2,26 @@ This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-
 
 ## Getting Started
 
+### Environment Variables
+
+1. Copy `.env.example` to `.env.local`:
+```bash
+cp .env.example .env.local
+```
+
+2. Fill in the required environment variables in `.env.local`:
+   - `NEXT_PUBLIC_SUPABASE_URL`: Your Supabase project URL
+   - `NEXT_PUBLIC_SUPABASE_ANON_KEY`: Your Supabase anonymous key
+   - `DATABASE_URL`: Your Supabase database connection string
+   - `GEMINI_API_KEY`: Your Google Gemini API key
+
+3. For Vercel deployment, add these environment variables in your Vercel dashboard:
+   - Go to your project settings → Environment Variables
+   - Add all the variables from `.env.example`
+   - Make sure to set them for Production, Preview, and Development environments
+
+### Development Server
+
 First, run the development server:
 
 ```bash
