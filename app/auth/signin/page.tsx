@@ -46,6 +46,15 @@ export default async function SignInPage({ searchParams }: SignInPageProps) {
         )}
         
         <SignInForm />
+        
+        <div className="text-center">
+          <Link
+            href="/auth/reset-password"
+            className="text-sm font-medium text-indigo-600 hover:text-indigo-500"
+          >
+            비밀번호를 잊으셨나요?
+          </Link>
+        </div>
       </div>
     </div>
   )

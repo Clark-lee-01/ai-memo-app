@@ -139,3 +139,114 @@ export async function signOutAction() {
     redirect('/auth/signin')
   }
 }
+
+export interface ResetPasswordResult {
+  success: boolean
+  error?: string
+}
+
+export async function resetPasswordAction({
+  email,
+}: {
+  email: string
+}): Promise<ResetPasswordResult> {
+  try {
+    const supabase = await createClient()
+
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/auth/reset-password/confirm`,
+    })
+
+    if (error) {
+      // Supabase 에러 메시지를 사용자 친화적으로 변환
+      let errorMessage = '비밀번호 재설정 요청에 실패했습니다'
+      
+      if (error.message.includes('User not found')) {
+        errorMessage = '등록되지 않은 이메일입니다'
+      } else if (error.message.includes('Email rate limit exceeded')) {
+        errorMessage = '이메일 발송 한도를 초과했습니다. 잠시 후 다시 시도해주세요'
+      } else if (error.message.includes('Signup is disabled')) {
+        errorMessage = '현재 비밀번호 재설정이 비활성화되어 있습니다'
+      } else {
+        console.error('Reset password error:', error)
+        errorMessage = `비밀번호 재설정 요청에 실패했습니다: ${error.message}`
+      }
+
+      return {
+        success: false,
+        error: errorMessage,
+      }
+    }
+
+    return {
+      success: true,
+    }
+  } catch (error) {
+    console.error('Reset password error:', error)
+    return {
+      success: false,
+      error: '예상치 못한 오류가 발생했습니다',
+    }
+  }
+}
+
+export interface UpdatePasswordResult {
+  success: boolean
+  error?: string
+}
+
+export async function updatePasswordAction({
+  password,
+  code,
+}: {
+  password: string
+  code: string
+}): Promise<UpdatePasswordResult> {
+  try {
+    const supabase = await createClient()
+
+    // 코드를 사용하여 세션 교환
+    const { error: sessionError } = await supabase.auth.exchangeCodeForSession(code)
+
+    if (sessionError) {
+      console.error('Exchange code error:', sessionError)
+      return {
+        success: false,
+        error: '유효하지 않거나 만료된 링크입니다',
+      }
+    }
+
+    // 비밀번호 업데이트
+    const { error: updateError } = await supabase.auth.updateUser({
+      password: password,
+    })
+
+    if (updateError) {
+      let errorMessage = '비밀번호 변경에 실패했습니다'
+      
+      if (updateError.message.includes('Password should be at least')) {
+        errorMessage = '비밀번호는 최소 6자 이상이어야 합니다'
+      } else if (updateError.message.includes('Password is too weak')) {
+        errorMessage = '비밀번호가 너무 약합니다. 더 강력한 비밀번호를 사용해주세요'
+      } else {
+        console.error('Update password error:', updateError)
+        errorMessage = `비밀번호 변경에 실패했습니다: ${updateError.message}`
+      }
+
+      return {
+        success: false,
+        error: errorMessage,
+      }
+    }
+
+    return {
+      success: true,
+    }
+  } catch (error) {
+    console.error('Update password error:', error)
+    return {
+      success: false,
+      error: '예상치 못한 오류가 발생했습니다',
+    }
+  }
+}

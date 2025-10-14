@@ -7,6 +7,7 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { signOutAction } from '@/app/actions/auth'
+import Link from 'next/link'
 
 export default async function Home() {
   const supabase = await createClient()
@@ -22,11 +23,19 @@ export default async function Home() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center py-6">
             <h1 className="text-3xl font-bold text-gray-900">AI 메모장</h1>
-            <form action={signOutAction}>
-              <Button type="submit" variant="outline">
-                로그아웃
-              </Button>
-            </form>
+            <div className="flex items-center gap-4">
+              <Link
+                href="/auth/reset-password"
+                className="text-sm text-gray-600 hover:text-gray-900"
+              >
+                비밀번호 변경
+              </Link>
+              <form action={signOutAction}>
+                <Button type="submit" variant="outline">
+                  로그아웃
+                </Button>
+              </form>
+            </div>
           </div>
         </div>
       </header>
