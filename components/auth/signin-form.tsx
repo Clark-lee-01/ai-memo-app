@@ -16,13 +16,39 @@ export function SignInForm() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [isLoading, setIsLoading] = useState(false)
-  const [error, setError] = useState('')
+  const [errors, setErrors] = useState<{
+    email?: string
+    general?: string
+  }>({})
   const router = useRouter()
+
+  // 이메일 유효성 검사
+  const validateEmail = (email: string) => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    return emailRegex.test(email)
+  }
+
+  // 실시간 이메일 유효성 검사
+  const handleEmailChange = (value: string) => {
+    setEmail(value)
+    if (value && !validateEmail(value)) {
+      setErrors(prev => ({ ...prev, email: '올바른 이메일 형식이 아닙니다' }))
+    } else {
+      setErrors(prev => ({ ...prev, email: undefined }))
+    }
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
-    setError('')
+    setErrors({})
+
+    // 클라이언트 사이드 유효성 검사
+    if (!validateEmail(email)) {
+      setErrors({ email: '올바른 이메일 형식이 아닙니다' })
+      setIsLoading(false)
+      return
+    }
 
     try {
       const result = await signInAction({ email, password })
@@ -31,10 +57,10 @@ export function SignInForm() {
         router.push('/')
         router.refresh()
       } else {
-        setError(result.error || '로그인에 실패했습니다')
+        setErrors({ general: result.error || '로그인에 실패했습니다' })
       }
     } catch (error) {
-      setError('예상치 못한 오류가 발생했습니다')
+      setErrors({ general: '예상치 못한 오류가 발생했습니다' })
     } finally {
       setIsLoading(false)
     }
@@ -48,10 +74,14 @@ export function SignInForm() {
           id="email"
           type="email"
           value={email}
-          onChange={(e) => setEmail(e.target.value)}
+          onChange={(e) => handleEmailChange(e.target.value)}
           placeholder="example@email.com"
           required
+          className={errors.email ? 'border-red-500' : ''}
         />
+        {errors.email && (
+          <p className="text-sm text-red-500">{errors.email}</p>
+        )}
       </div>
 
       <div className="space-y-2">
@@ -66,9 +96,9 @@ export function SignInForm() {
         />
       </div>
 
-      {error && (
+      {errors.general && (
         <div className="p-3 bg-red-50 border border-red-200 rounded-md">
-          <p className="text-sm text-red-600">{error}</p>
+          <p className="text-sm text-red-600">{errors.general}</p>
         </div>
       )}
 

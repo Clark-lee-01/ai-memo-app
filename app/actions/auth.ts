@@ -93,9 +93,26 @@ export async function signInAction({
     })
 
     if (error) {
+      // Supabase 에러 메시지를 사용자 친화적으로 변환
+      let errorMessage = '로그인에 실패했습니다'
+      
+      if (error.message.includes('Invalid login credentials')) {
+        errorMessage = '이메일 또는 비밀번호가 올바르지 않습니다'
+      } else if (error.message.includes('Email not confirmed')) {
+        errorMessage = '이메일 인증이 완료되지 않았습니다. 이메일을 확인해주세요'
+      } else if (error.message.includes('Too many requests')) {
+        errorMessage = '너무 많은 로그인 시도가 있었습니다. 잠시 후 다시 시도해주세요'
+      } else if (error.message.includes('User not found')) {
+        errorMessage = '등록되지 않은 이메일입니다'
+      } else {
+        // 디버깅을 위해 원본 에러 메시지도 포함
+        console.error('Sign in error:', error)
+        errorMessage = `로그인에 실패했습니다: ${error.message}`
+      }
+
       return {
         success: false,
-        error: error.message,
+        error: errorMessage,
       }
     }
 
@@ -107,7 +124,7 @@ export async function signInAction({
     console.error('Sign in error:', error)
     return {
       success: false,
-      error: '로그인 중 오류가 발생했습니다',
+      error: '예상치 못한 오류가 발생했습니다',
     }
   }
 }

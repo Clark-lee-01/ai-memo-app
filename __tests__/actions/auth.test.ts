@@ -117,14 +117,14 @@ describe('Auth Actions', () => {
 
       const result = await signInAction({
         email: 'test@example.com',
-        password: 'password123',
+        password: 'password123!',
       })
 
       expect(result.success).toBe(true)
       expect(result.user).toEqual({ id: '123', email: 'test@example.com' })
     })
 
-    it('잘못된 자격 증명으로 로그인을 시도할 때 오류를 반환한다', async () => {
+    it('잘못된 자격 증명으로 로그인을 시도할 때 사용자 친화적 오류를 반환한다', async () => {
       const mockSupabase = {
         auth: {
           signInWithPassword: jest.fn().mockResolvedValue({
@@ -142,7 +142,49 @@ describe('Auth Actions', () => {
       })
 
       expect(result.success).toBe(false)
-      expect(result.error).toBe('Invalid login credentials')
+      expect(result.error).toBe('이메일 또는 비밀번호가 올바르지 않습니다')
+    })
+
+    it('이메일 인증이 완료되지 않은 경우 적절한 오류를 반환한다', async () => {
+      const mockSupabase = {
+        auth: {
+          signInWithPassword: jest.fn().mockResolvedValue({
+            data: null,
+            error: { message: 'Email not confirmed' },
+          }),
+        },
+      }
+
+      mockCreateClient.mockReturnValue(mockSupabase as any)
+
+      const result = await signInAction({
+        email: 'test@example.com',
+        password: 'password123!',
+      })
+
+      expect(result.success).toBe(false)
+      expect(result.error).toBe('이메일 인증이 완료되지 않았습니다. 이메일을 확인해주세요')
+    })
+
+    it('너무 많은 요청 시 적절한 오류를 반환한다', async () => {
+      const mockSupabase = {
+        auth: {
+          signInWithPassword: jest.fn().mockResolvedValue({
+            data: null,
+            error: { message: 'Too many requests' },
+          }),
+        },
+      }
+
+      mockCreateClient.mockReturnValue(mockSupabase as any)
+
+      const result = await signInAction({
+        email: 'test@example.com',
+        password: 'password123!',
+      })
+
+      expect(result.success).toBe(false)
+      expect(result.error).toBe('너무 많은 로그인 시도가 있었습니다. 잠시 후 다시 시도해주세요')
     })
   })
 })
