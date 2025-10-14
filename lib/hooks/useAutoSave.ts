@@ -1,10 +1,11 @@
 // lib/hooks/useAutoSave.ts
-// 자동 저장 훅 - 노트 수정 시 실시간 자동 저장 기능
+// 자동 저장 훅 - 노트 작성/수정 시 실시간 자동 저장 및 임시 저장 기능
 // AI 메모장 프로젝트의 자동 저장 로직
 
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { saveTempData, clearTempData, createTempStorageKey } from '@/lib/utils/tempStorage';
 
 export interface SaveStatus {
   status: 'idle' | 'saving' | 'saved' | 'error';
@@ -14,18 +15,22 @@ export interface SaveStatus {
 
 export interface UseAutoSaveOptions {
   data: any;
-  onSave: (data: any) => Promise<void>;
+  onSave?: (data: any) => Promise<void>; // 서버 저장 (선택적)
   debounceMs?: number;
   intervalMs?: number;
   enabled?: boolean;
+  noteId?: string; // 노트 ID (수정 모드일 때)
+  enableTempSave?: boolean; // 로컬 임시 저장 활성화
 }
 
 export function useAutoSave({
   data,
   onSave,
   debounceMs = 2000, // 타이핑 중단 후 2초
-  intervalMs = 5000, // 5초마다 주기적 저장
+  intervalMs = 3000, // 3초마다 주기적 저장
   enabled = true,
+  noteId,
+  enableTempSave = true,
 }: UseAutoSaveOptions) {
   const [saveStatus, setSaveStatus] = useState<SaveStatus>({ status: 'idle' });
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
@@ -37,20 +42,35 @@ export function useAutoSave({
 
   // 데이터가 변경되었는지 확인
   const hasDataChanged = useCallback(() => {
-    return JSON.stringify(data) !== JSON.stringify(lastSavedDataRef.current);
-  }, [data]);
+    const changed = JSON.stringify(data) !== JSON.stringify(lastSavedDataRef.current);
+    console.log('데이터 변경 확인:', { data, lastSaved: lastSavedDataRef.current, changed });
+    return changed;
+  }, []);
 
   // 저장 실행
   const performSave = useCallback(async () => {
+    console.log('performSave 호출됨:', { enabled, isSaving: isSavingRef.current, hasChanged: hasDataChanged() });
     if (!enabled || isSavingRef.current || !hasDataChanged()) {
+      console.log('저장 조건 불만족:', { enabled, isSaving: isSavingRef.current, hasChanged: hasDataChanged() });
       return;
     }
 
+    console.log('저장 시작');
     isSavingRef.current = true;
     setSaveStatus({ status: 'saving' });
 
     try {
-      await onSave(data);
+      // 로컬 임시 저장 (항상 실행)
+      if (enableTempSave) {
+        const storageKey = createTempStorageKey(noteId);
+        saveTempData(storageKey, data, noteId);
+      }
+
+      // 서버 저장 (선택적)
+      if (onSave) {
+        await onSave(data);
+      }
+
       lastSavedDataRef.current = data;
       setSaveStatus({ 
         status: 'saved', 
@@ -66,20 +86,22 @@ export function useAutoSave({
     } finally {
       isSavingRef.current = false;
     }
-  }, [enabled, data, onSave, hasDataChanged]);
+  }, [enabled, data, onSave, enableTempSave, noteId]);
 
   // 디바운싱된 저장 (타이핑 중단 후)
   const debouncedSave = useCallback(() => {
+    console.log('debouncedSave 호출됨');
     if (debounceTimeoutRef.current) {
       clearTimeout(debounceTimeoutRef.current);
     }
 
     debounceTimeoutRef.current = setTimeout(() => {
+      console.log('debouncedSave timeout 실행됨');
       if (hasDataChanged()) {
         performSave();
       }
     }, debounceMs);
-  }, [debounceMs, performSave, hasDataChanged]);
+  }, [debounceMs, performSave]);
 
   // 주기적 저장
   const startIntervalSave = useCallback(() => {
@@ -92,7 +114,7 @@ export function useAutoSave({
         performSave();
       }
     }, intervalMs);
-  }, [intervalMs, performSave, hasDataChanged]);
+  }, [intervalMs, performSave]);
 
   // 데이터 변경 감지
   useEffect(() => {
@@ -105,7 +127,7 @@ export function useAutoSave({
       // 디바운싱된 저장 시작
       debouncedSave();
     }
-  }, [data, enabled, debouncedSave, hasDataChanged]);
+  }, [data, enabled]);
 
   // 주기적 저장 시작/중지
   useEffect(() => {

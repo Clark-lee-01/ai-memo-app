@@ -4,7 +4,7 @@
 
 'use client';
 
-import { useState, useTransition, useCallback } from 'react';
+import { useState, useTransition, useCallback, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -18,6 +18,8 @@ import { NoteFormErrors } from '@/lib/types/notes';
 import { validateNoteForm } from '@/lib/validations/notes';
 import { useAutoSave } from '@/lib/hooks/useAutoSave';
 import { SaveStatusComponent } from '@/components/notes/save-status';
+import { RecoveryDialog } from '@/components/notes/recovery-dialog';
+import { getTempData, clearTempData, createTempStorageKey } from '@/lib/utils/tempStorage';
 
 interface NoteFormProps {
   initialData?: {
@@ -27,18 +29,22 @@ interface NoteFormProps {
   mode?: 'create' | 'edit';
   noteId?: string; // 수정 모드일 때 노트 ID
   onCancel?: () => void;
+  enableRecovery?: boolean; // 데이터 복구 기능 활성화
 }
 
 export function NoteForm({ 
   initialData = { title: '', content: '' }, 
   mode = 'create',
   noteId,
-  onCancel 
+  onCancel,
+  enableRecovery = false
 }: NoteFormProps) {
   const [title, setTitle] = useState(initialData.title || '');
   const [content, setContent] = useState(initialData.content || '');
   const [errors, setErrors] = useState<NoteFormErrors>({});
   const [isPending, startTransition] = useTransition();
+  const [showRecoveryDialog, setShowRecoveryDialog] = useState(false);
+  const [tempData, setTempData] = useState<any>(null);
   const router = useRouter();
 
   // 자동 저장 함수 (수정 모드일 때만)
@@ -57,14 +63,58 @@ export function NoteForm({
     }
   }, [mode, noteId]);
 
-  // 자동 저장 훅 (수정 모드일 때만 활성화)
+  // 자동 저장 훅 (모든 모드에서 활성화)
   const { saveStatus, hasUnsavedChanges, manualSave } = useAutoSave({
     data: { title, content },
-    onSave: handleAutoSave,
+    onSave: mode === 'edit' && noteId ? handleAutoSave : undefined,
     debounceMs: 2000, // 타이핑 중단 후 2초
-    intervalMs: 5000, // 5초마다 주기적 저장
-    enabled: mode === 'edit' && !!noteId,
+    intervalMs: 3000, // 3초마다 주기적 저장
+    enabled: true,
+    noteId,
+    enableTempSave: true,
   });
+
+  // 페이지 로드 시 임시 저장 데이터 확인
+  useEffect(() => {
+    if (!enableRecovery) return;
+
+    const storageKey = createTempStorageKey(noteId);
+    const tempData = getTempData(storageKey);
+    
+    if (tempData && tempData.data) {
+      // 초기 데이터가 비어있고 임시 저장 데이터가 있는 경우에만 복구 다이얼로그 표시
+      const hasInitialData = initialData.title || initialData.content;
+      if (!hasInitialData) {
+        setTempData(tempData);
+        setShowRecoveryDialog(true);
+      }
+    }
+  }, [enableRecovery, noteId, initialData]);
+
+  // 복구 처리
+  const handleRecover = useCallback(() => {
+    if (tempData?.data) {
+      setTitle(tempData.data.title || '');
+      setContent(tempData.data.content || '');
+      
+      // 임시 저장 데이터 삭제
+      const storageKey = createTempStorageKey(noteId);
+      clearTempData(storageKey);
+    }
+    
+    setShowRecoveryDialog(false);
+    setTempData(null);
+  }, [tempData, noteId]);
+
+  // 복구 거부 처리
+  const handleDiscard = useCallback(() => {
+    // 임시 저장 데이터 삭제
+    const storageKey = createTempStorageKey(noteId);
+    clearTempData(storageKey);
+    
+    setShowRecoveryDialog(false);
+    setTempData(null);
+  }, [noteId]);
 
   // 실시간 유효성 검사
   const validateField = (field: 'title' | 'content', value: string) => {
@@ -130,6 +180,9 @@ export function NoteForm({
         if (mode === 'edit' && noteId) {
           // 수정 모드
           await updateNote(noteId, formData);
+          // 임시 저장 데이터 삭제
+          const storageKey = createTempStorageKey(noteId);
+          clearTempData(storageKey);
           // 성공 시 노트 상세 페이지로 리다이렉트
           router.push(`/notes/${noteId}?message=노트가 성공적으로 수정되었습니다`);
         } else {
@@ -139,6 +192,9 @@ export function NoteForm({
           if (!result.success) {
             setErrors({ general: result.error });
           } else {
+            // 임시 저장 데이터 삭제
+            const storageKey = createTempStorageKey();
+            clearTempData(storageKey);
             // 성공 시 노트 목록 페이지로 리다이렉트
             router.push('/notes');
           }
@@ -210,14 +266,13 @@ export function NoteForm({
             </Alert>
           )}
 
-          {/* 자동 저장 안내 (수정 모드일 때만) */}
-          {mode === 'edit' && (
-            <Alert>
-              <AlertDescription>
-                💡 변경사항은 자동으로 저장됩니다. 수동 저장은 Ctrl+S를 사용하세요.
-              </AlertDescription>
-            </Alert>
-          )}
+          {/* 자동 저장 안내 */}
+          <Alert>
+            <AlertDescription>
+              💡 변경사항은 자동으로 임시 저장됩니다. 
+              {mode === 'edit' ? ' 서버 저장은 Ctrl+S를 사용하세요.' : ' 정식 저장을 위해 저장 버튼을 클릭하세요.'}
+            </AlertDescription>
+          </Alert>
 
           {/* 제목 입력 필드 */}
           <div className="space-y-2">
@@ -318,6 +373,18 @@ export function NoteForm({
         </form>
       </CardContent>
     </Card>
+
+    {/* 데이터 복구 다이얼로그 */}
+    <RecoveryDialog
+      isOpen={showRecoveryDialog}
+      onRecover={handleRecover}
+      onDiscard={handleDiscard}
+      tempData={tempData?.data ? {
+        title: tempData.data.title,
+        content: tempData.data.content,
+        timestamp: tempData.timestamp
+      } : undefined}
+    />
     </div>
   );
 }
