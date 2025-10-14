@@ -9,7 +9,7 @@ import { redirect } from 'next/navigation';
 import { createClient as createServerClient } from '@/lib/supabase/server';
 import { db } from '@/lib/db';
 import { notes, users } from '@/drizzle/schema';
-import { eq, and, desc, asc, ilike, count } from 'drizzle-orm';
+import { eq, and, desc, asc, ilike, count, isNull } from 'drizzle-orm';
 import { validateNoteForm, validateNoteUpdate, validateNoteId, validateNoteListOptions } from '@/lib/validations/notes';
 import { NoteCreateResult, NoteListResponse } from '@/lib/types/notes';
 
@@ -110,7 +110,7 @@ export async function getNote(noteId: string) {
         and(
           eq(notes.id, noteId),
           eq(notes.userId, user.id),
-          eq(notes.deletedAt, null) // 삭제되지 않은 노트만 조회
+          isNull(notes.deletedAt) // 삭제되지 않은 노트만 조회
         )
       )
       .limit(1);
@@ -156,7 +156,7 @@ export async function getNotes(options: {
     // 검색 조건 구성 (삭제되지 않은 노트만)
     const whereConditions = [
       eq(notes.userId, user.id),
-      eq(notes.deletedAt, null) // 삭제되지 않은 노트만 조회
+      isNull(notes.deletedAt) // 삭제되지 않은 노트만 조회
     ];
     if (search) {
       whereConditions.push(
@@ -240,7 +240,7 @@ export async function updateNote(noteId: string, formData: FormData) {
         and(
           eq(notes.id, noteId),
           eq(notes.userId, user.id),
-          eq(notes.deletedAt, null) // 삭제되지 않은 노트만 조회
+          isNull(notes.deletedAt) // 삭제되지 않은 노트만 조회
         )
       )
       .limit(1);
@@ -279,13 +279,19 @@ export async function deleteNote(noteId: string) {
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     
     if (authError || !user) {
-      throw new Error('로그인이 필요합니다');
+      return {
+        success: false,
+        error: '로그인이 필요합니다'
+      };
     }
 
     // 노트 ID 유효성 검사
     const idValidation = validateNoteId(noteId);
     if (!idValidation.success) {
-      throw new Error('유효하지 않은 노트 ID입니다');
+      return {
+        success: false,
+        error: '유효하지 않은 노트 ID입니다'
+      };
     }
 
     // 노트 존재 여부 및 소유권 확인 (삭제되지 않은 노트만)
@@ -296,13 +302,16 @@ export async function deleteNote(noteId: string) {
         and(
           eq(notes.id, noteId),
           eq(notes.userId, user.id),
-          eq(notes.deletedAt, null) // 삭제되지 않은 노트만 조회
+          isNull(notes.deletedAt) // 삭제되지 않은 노트만 조회
         )
       )
       .limit(1);
 
     if (!existingNote) {
-      throw new Error('노트를 찾을 수 없습니다');
+      return {
+        success: false,
+        error: '노트를 찾을 수 없습니다'
+      };
     }
 
     // 소프트 삭제 (deletedAt과 deletedBy 설정)
@@ -314,12 +323,19 @@ export async function deleteNote(noteId: string) {
       })
       .where(eq(notes.id, noteId));
 
-    // 페이지 재검증 및 리다이렉트
+    // 페이지 재검증
     revalidatePath('/notes');
-    redirect('/notes?message=노트가 휴지통으로 이동되었습니다');
+    
+    return {
+      success: true,
+      message: '노트가 휴지통으로 이동되었습니다'
+    };
 
   } catch (error) {
     console.error('노트 삭제 에러:', error);
-    throw error;
+    return {
+      success: false,
+      error: '노트 삭제 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.'
+    };
   }
 }

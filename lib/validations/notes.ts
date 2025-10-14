@@ -65,3 +65,4 @@ export function validateNoteId(id: unknown) {
 export function validateNoteListOptions(options: unknown) {
   return noteListOptionsSchema.safeParse(options);
 }
+

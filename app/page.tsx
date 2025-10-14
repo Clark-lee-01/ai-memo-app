@@ -7,8 +7,10 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { signOutAction } from '@/app/actions/auth'
+import { getNotes } from '@/app/actions/notes'
+import { NoteCard } from '@/components/notes/note-card'
 import Link from 'next/link'
-import { Plus, FileText, List } from 'lucide-react'
+import { Plus, FileText, List, Clock } from 'lucide-react'
 
 export default async function Home() {
   const supabase = await createClient()
@@ -16,6 +18,20 @@ export default async function Home() {
 
   if (!user) {
     redirect('/auth/signin')
+  }
+
+  // 최근 노트 6개 가져오기
+  let recentNotes = []
+  try {
+    const { notes } = await getNotes({ 
+      page: 1, 
+      limit: 6, 
+      sortBy: 'createdAt', 
+      sortOrder: 'desc' 
+    })
+    recentNotes = notes
+  } catch (error) {
+    console.error('최근 노트 조회 실패:', error)
   }
 
   return (
@@ -90,18 +106,38 @@ export default async function Home() {
             </div>
           </div>
 
-          {/* 최근 노트 섹션 (향후 구현) */}
+          {/* 최근 노트 섹션 */}
           <div className="bg-white rounded-lg shadow-md p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">최근 노트</h3>
-            <div className="text-center py-8">
-              <FileText className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-              <p className="text-gray-500">아직 작성된 노트가 없습니다.</p>
-              <p className="text-gray-400 text-sm mt-2">
-                <Link href="/notes/new" className="text-blue-600 hover:text-blue-800">
-                  첫 번째 노트를 작성해보세요
-                </Link>
-              </p>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900 flex items-center">
+                <Clock className="w-5 h-5 mr-2 text-gray-600" />
+                최근 노트
+              </h3>
+              <Link 
+                href="/notes" 
+                className="text-sm text-blue-600 hover:text-blue-800 font-medium"
+              >
+                전체 보기
+              </Link>
             </div>
+            
+            {recentNotes.length === 0 ? (
+              <div className="text-center py-8">
+                <FileText className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                <p className="text-gray-500">아직 작성된 노트가 없습니다.</p>
+                <p className="text-gray-400 text-sm mt-2">
+                  <Link href="/notes/new" className="text-blue-600 hover:text-blue-800">
+                    첫 번째 노트를 작성해보세요
+                  </Link>
+                </p>
+              </div>
+            ) : (
+              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                {recentNotes.map((note) => (
+                  <NoteCard key={note.id} note={note} />
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </main>

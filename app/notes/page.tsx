@@ -11,7 +11,7 @@ import { EmptyState } from '@/components/notes/empty-state';
 import { Pagination } from '@/components/notes/pagination';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Plus, AlertCircle } from 'lucide-react';
+import { Plus, AlertCircle, Home } from 'lucide-react';
 import NotesLoading from './loading';
 
 interface NotesPageProps {
@@ -95,7 +95,15 @@ export default async function NotesPage({ searchParams }: NotesPageProps) {
     <div className="container max-w-6xl mx-auto p-6">
       {/* 헤더 */}
       <div className="flex items-center justify-between mb-8">
-        <h1 className="text-3xl font-bold">내 노트</h1>
+        <div className="flex items-center gap-4">
+          <h1 className="text-3xl font-bold">내 노트</h1>
+          <Button asChild variant="outline" size="sm">
+            <Link href="/">
+              <Home className="h-4 w-4 mr-2" />
+              메인으로
+            </Link>
+          </Button>
+        </div>
         <Button asChild>
           <Link href="/notes/new">
             <Plus className="h-4 w-4 mr-2" />

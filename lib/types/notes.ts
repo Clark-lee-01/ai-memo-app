@@ -53,3 +53,4 @@ export interface NoteListResponse {
   hasNextPage: boolean;
   hasPreviousPage: boolean;
 }
+

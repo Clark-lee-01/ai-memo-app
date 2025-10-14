@@ -35,8 +35,13 @@ export function NoteDetailActions({ noteId }: NoteDetailActionsProps) {
     setError(null);
     startTransition(async () => {
       try {
-        await deleteNote(noteId);
-        // deleteNote는 redirect를 포함하고 있으므로 여기서 추가 동작 불필요
+        const result = await deleteNote(noteId);
+        if (result.success) {
+          // 성공 시 노트 목록 페이지로 리다이렉트
+          router.push('/notes?message=' + encodeURIComponent(result.message || '노트가 삭제되었습니다'));
+        } else {
+          setError(result.error || '노트 삭제 중 오류가 발생했습니다.');
+        }
       } catch (err) {
         console.error('노트 삭제 에러:', err);
         setError('노트 삭제 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.');
