@@ -102,14 +102,15 @@ export async function getNote(noteId: string) {
       throw new Error('유효하지 않은 노트 ID입니다');
     }
 
-    // 노트 조회
+    // 노트 조회 (삭제되지 않은 노트만)
     const [note] = await db
       .select()
       .from(notes)
       .where(
         and(
           eq(notes.id, noteId),
-          eq(notes.userId, user.id)
+          eq(notes.userId, user.id),
+          eq(notes.deletedAt, null) // 삭제되지 않은 노트만 조회
         )
       )
       .limit(1);
@@ -152,8 +153,11 @@ export async function getNotes(options: {
     const { page, limit, sortBy, sortOrder, search } = optionsValidation.data;
     const offset = (page - 1) * limit;
 
-    // 검색 조건 구성
-    const whereConditions = [eq(notes.userId, user.id)];
+    // 검색 조건 구성 (삭제되지 않은 노트만)
+    const whereConditions = [
+      eq(notes.userId, user.id),
+      eq(notes.deletedAt, null) // 삭제되지 않은 노트만 조회
+    ];
     if (search) {
       whereConditions.push(
         ilike(notes.title, `%${search}%`)
@@ -228,14 +232,15 @@ export async function updateNote(noteId: string, formData: FormData) {
 
     const updateData = validation.data;
 
-    // 노트 존재 여부 및 소유권 확인
+    // 노트 존재 여부 및 소유권 확인 (삭제되지 않은 노트만)
     const [existingNote] = await db
       .select()
       .from(notes)
       .where(
         and(
           eq(notes.id, noteId),
-          eq(notes.userId, user.id)
+          eq(notes.userId, user.id),
+          eq(notes.deletedAt, null) // 삭제되지 않은 노트만 조회
         )
       )
       .limit(1);
@@ -266,7 +271,7 @@ export async function updateNote(noteId: string, formData: FormData) {
   }
 }
 
-// 노트 삭제
+// 노트 삭제 (소프트 삭제)
 export async function deleteNote(noteId: string) {
   try {
     // 사용자 인증 확인
@@ -283,14 +288,15 @@ export async function deleteNote(noteId: string) {
       throw new Error('유효하지 않은 노트 ID입니다');
     }
 
-    // 노트 존재 여부 및 소유권 확인
+    // 노트 존재 여부 및 소유권 확인 (삭제되지 않은 노트만)
     const [existingNote] = await db
       .select()
       .from(notes)
       .where(
         and(
           eq(notes.id, noteId),
-          eq(notes.userId, user.id)
+          eq(notes.userId, user.id),
+          eq(notes.deletedAt, null) // 삭제되지 않은 노트만 조회
         )
       )
       .limit(1);
@@ -299,14 +305,18 @@ export async function deleteNote(noteId: string) {
       throw new Error('노트를 찾을 수 없습니다');
     }
 
-    // 노트 삭제
+    // 소프트 삭제 (deletedAt과 deletedBy 설정)
     await db
-      .delete(notes)
+      .update(notes)
+      .set({
+        deletedAt: new Date(),
+        deletedBy: user.id,
+      })
       .where(eq(notes.id, noteId));
 
     // 페이지 재검증 및 리다이렉트
     revalidatePath('/notes');
-    redirect('/notes?message=노트가 삭제되었습니다');
+    redirect('/notes?message=노트가 휴지통으로 이동되었습니다');
 
   } catch (error) {
     console.error('노트 삭제 에러:', error);

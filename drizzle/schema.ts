@@ -13,9 +13,12 @@ export const notes = pgTable('notes', {
   content: text('content'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  deletedAt: timestamp('deleted_at', { withTimezone: true }),
+  deletedBy: uuid('deleted_by').references(() => users.id),
 }, (table) => ({
   userIdIdx: index('notes_user_id_idx').on(table.userId),
   createdAtIdx: index('notes_created_at_idx').on(table.createdAt),
+  deletedAtIdx: index('notes_deleted_at_idx').on(table.deletedAt),
 }));
 
 // Note Tags 테이블 - 노트 태그 저장
