@@ -9,6 +9,7 @@ import { getNotes } from '@/app/actions/notes';
 import { NoteCard } from '@/components/notes/note-card';
 import { EmptyState } from '@/components/notes/empty-state';
 import { Pagination } from '@/components/notes/pagination';
+import { NoteSort } from '@/components/notes/note-sort';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Plus, AlertCircle, Home } from 'lucide-react';
@@ -17,13 +18,23 @@ import NotesLoading from './loading';
 interface NotesPageProps {
   searchParams: Promise<{
     page?: string;
+    sortBy?: string;
+    sortOrder?: string;
   }>;
 }
 
-async function NotesList({ page }: { page: number }) {
+async function NotesList({ 
+  page, 
+  sortBy, 
+  sortOrder 
+}: { 
+  page: number;
+  sortBy: 'createdAt' | 'updatedAt' | 'title';
+  sortOrder: 'asc' | 'desc';
+}) {
   try {
     const { notes, totalCount, totalPages, currentPage, hasNextPage, hasPreviousPage } = 
-      await getNotes({ page });
+      await getNotes({ page, sortBy, sortOrder });
 
     // 노트가 없는 경우 빈 상태 표시
     if (notes.length === 0 && page === 1) {
@@ -90,6 +101,11 @@ async function NotesList({ page }: { page: number }) {
 export default async function NotesPage({ searchParams }: NotesPageProps) {
   const params = await searchParams;
   const page = parseInt(params.page || '1', 10);
+  const sortBy = (params.sortBy as 'createdAt' | 'updatedAt' | 'title') || 'createdAt';
+  const sortOrder = (params.sortOrder as 'asc' | 'desc') || 'desc';
+  
+  // 현재 정렬 상태를 문자열로 변환
+  const currentSort = `${sortBy}-${sortOrder}`;
 
   return (
     <div className="container max-w-6xl mx-auto p-6">
@@ -104,17 +120,20 @@ export default async function NotesPage({ searchParams }: NotesPageProps) {
             </Link>
           </Button>
         </div>
-        <Button asChild>
-          <Link href="/notes/new">
-            <Plus className="h-4 w-4 mr-2" />
-            새 노트 작성
-          </Link>
-        </Button>
+        <div className="flex items-center gap-4">
+          <NoteSort currentSort={currentSort} />
+          <Button asChild>
+            <Link href="/notes/new">
+              <Plus className="h-4 w-4 mr-2" />
+              새 노트 작성
+            </Link>
+          </Button>
+        </div>
       </div>
 
       {/* 노트 목록 */}
       <Suspense fallback={<NotesLoading />}>
-        <NotesList page={page} />
+        <NotesList page={page} sortBy={sortBy} sortOrder={sortOrder} />
       </Suspense>
     </div>
   );
