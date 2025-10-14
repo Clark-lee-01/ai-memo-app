@@ -5,8 +5,9 @@
 
 import { Suspense } from 'react';
 import { notFound } from 'next/navigation';
-import { getNote } from '@/app/actions/notes';
+import { getNote, getNoteSummary } from '@/app/actions/notes';
 import { NoteDetailActions } from '@/components/notes/note-detail-actions';
+import { SummarySection } from '@/components/notes/summary-section';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft } from 'lucide-react';
@@ -23,8 +24,10 @@ export default async function NotePage({ params }: PageProps) {
 
   // 노트 조회
   let note;
+  let summary;
   try {
     note = await getNote(noteId);
+    summary = await getNoteSummary(noteId);
   } catch (error) {
     console.error('노트 조회 실패:', error);
     notFound();
@@ -47,6 +50,9 @@ export default async function NotePage({ params }: PageProps) {
         
         <NoteDetailActions noteId={note.id} />
       </div>
+
+      {/* AI 요약 섹션 */}
+      <SummarySection noteId={note.id} initialSummary={summary} />
 
       {/* 노트 내용 */}
       <Card>

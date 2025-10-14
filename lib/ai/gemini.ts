@@ -3,12 +3,10 @@
 // AI 기반 요약 및 태깅 기능을 위한 Gemini API 연동
 // 관련 파일: app/actions/notes.ts, lib/types/notes.ts
 
-import { GoogleGenAI } from '@google/genai';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 
 // Gemini API 클라이언트 초기화
-const genAI = new GoogleGenAI({
-  apiKey: process.env.GEMINI_API_KEY!,
-});
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
 
 // 토큰 제한 상수 (8k 토큰)
 const MAX_TOKENS = 8000;
@@ -110,7 +108,6 @@ export async function generateContent(prompt: string): Promise<string> {
     const model = genAI.getGenerativeModel({ 
       model: 'gemini-2.5-flash',
       generationConfig: {
-        thinkingBudget: 0, // 응답 최적화
         maxOutputTokens: 1000, // 출력 토큰 제한
       }
     });
