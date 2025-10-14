@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button'
 import { signOutAction } from '@/app/actions/auth'
 import { getNotes } from '@/app/actions/notes'
 import { NoteCard } from '@/components/notes/note-card'
+import { EmptyState } from '@/components/notes/empty-state'
 import Link from 'next/link'
 import { Plus, FileText, List, Clock } from 'lucide-react'
 
@@ -122,15 +123,14 @@ export default async function Home() {
             </div>
             
             {recentNotes.length === 0 ? (
-              <div className="text-center py-8">
-                <FileText className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                <p className="text-gray-500">아직 작성된 노트가 없습니다.</p>
-                <p className="text-gray-400 text-sm mt-2">
-                  <Link href="/notes/new" className="text-blue-600 hover:text-blue-800">
-                    첫 번째 노트를 작성해보세요
-                  </Link>
-                </p>
-              </div>
+              <EmptyState
+                variant="welcome"
+                title="첫 번째 노트를 작성해보세요"
+                description="AI 메모장에서 아이디어를 기록하고 관리해보세요. 간단하고 직관적인 인터페이스로 언제든지 메모를 작성할 수 있습니다."
+                actionLabel="노트 작성하기"
+                actionHref="/notes/new"
+                className="border-0 shadow-none bg-transparent"
+              />
             ) : (
               <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                 {recentNotes.map((note) => (
