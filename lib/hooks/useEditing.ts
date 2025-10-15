@@ -16,13 +16,13 @@ export type EditingStatus = 'idle' | 'editing' | 'saving' | 'saved' | 'cancelled
 
 // 편집 옵션 정의
 export interface EditingOptions {
-  onSave?: (data: any) => void;
+  onSave?: (data: { title: string; content: string; summary?: string; tags?: string[] }) => void;
   onCancel?: () => void;
-  onError?: (error: any) => void;
+  onError?: (error: { message: string }) => void;
 }
 
 // 편집 함수 타입 정의
-export type EditingFunction = (data: any) => Promise<any>;
+export type EditingFunction = (data: { title: string; content: string; summary?: string; tags?: string[] }) => Promise<{ success: boolean; error?: string }>;
 
 // useEditing 훅
 export function useEditing(
@@ -31,8 +31,8 @@ export function useEditing(
   options: EditingOptions = {}
 ) {
   const [isEditing, setIsEditing] = useState(false);
-  const [originalData, setOriginalData] = useState<any>(null);
-  const [editedData, setEditedData] = useState<any>(null);
+  const [originalData, setOriginalData] = useState<{ title: string; content: string; summary?: string; tags?: string[] } | null>(null);
+  const [editedData, setEditedData] = useState<{ title: string; content: string; summary?: string; tags?: string[] } | null>(null);
   const [hasChanges, setHasChanges] = useState(false);
   const aiStatus = useAIStatus();
 
@@ -43,7 +43,7 @@ export function useEditing(
   } = options;
 
   // 편집 시작
-  const startEditing = useCallback((data: any) => {
+  const startEditing = useCallback((data: { title: string; content: string; summary?: string; tags?: string[] }) => {
     setOriginalData(data);
     setEditedData(data);
     setIsEditing(true);
@@ -62,7 +62,7 @@ export function useEditing(
   }, [originalData, aiStatus, onCancel]);
 
   // 데이터 변경 감지
-  const handleDataChange = useCallback((newData: any) => {
+  const handleDataChange = useCallback((newData: { title: string; content: string; summary?: string; tags?: string[] }) => {
     setEditedData(newData);
     const hasChanges = JSON.stringify(newData) !== JSON.stringify(originalData);
     setHasChanges(hasChanges);
@@ -79,6 +79,11 @@ export function useEditing(
       aiStatus.reset();
       aiStatus.startProcessing();
 
+      if (!editedData) {
+        aiStatus.markError(new Error('편집할 데이터가 없습니다.'));
+        return;
+      }
+      
       const result = await updateFunction(editedData);
       
       if (result.success) {
@@ -86,14 +91,14 @@ export function useEditing(
         setIsEditing(false);
         setHasChanges(false);
         setOriginalData(null);
-        onSave?.(result);
+        onSave?.(editedData);
       } else {
         aiStatus.markError(new Error(result.error || '편집 저장에 실패했습니다.'));
-        onError?.(result);
+        onError?.({ message: result.error || '편집 저장에 실패했습니다.' });
       }
     } catch (error) {
-      aiStatus.markError(error);
-      onError?.(error);
+      aiStatus.markError(error instanceof Error ? error : new Error('알 수 없는 오류가 발생했습니다.'));
+      onError?.({ message: error instanceof Error ? error.message : '알 수 없는 오류가 발생했습니다.' });
     }
   }, [editedData, hasChanges, updateFunction, aiStatus, onSave, onError, cancelEditing]);
 

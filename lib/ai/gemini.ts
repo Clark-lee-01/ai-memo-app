@@ -71,8 +71,11 @@ async function callGeminiWithRetry<T>(
       
       // 성공 시 토큰 사용량 기록 (실제 사용량이 있다면)
       if (result && typeof result === 'object' && 'tokenUsage' in result) {
+        const tokenUsage = (result as { tokenUsage: { inputTokens: number; outputTokens: number } }).tokenUsage;
         tokenMonitor.recordUsage({
-          ...(result as any).tokenUsage,
+          input: tokenUsage.inputTokens,
+          output: tokenUsage.outputTokens,
+          total: tokenUsage.inputTokens + tokenUsage.outputTokens,
           operation: operationType,
           userId,
         });
@@ -84,7 +87,7 @@ async function callGeminiWithRetry<T>(
       
       // AI 에러로 분류
       const context = createErrorContext(userId, operationType, 'gemini-api');
-      const aiError = classifyAIError(error, context);
+      const aiError = classifyAIError(error as { name?: string; code?: string; message?: string; status?: number }, context);
       
       if (aiError) {
         lastAIError = aiError;
@@ -106,7 +109,7 @@ async function callGeminiWithRetry<T>(
         await new Promise(resolve => setTimeout(resolve, waitTime));
       } else {
         // 일반 에러 처리
-        if (attempt === maxRetries || isNonRetryableError(error)) {
+        if (attempt === maxRetries || isNonRetryableError(error as { statusCode?: number; message?: string })) {
           break;
         }
         
@@ -129,7 +132,7 @@ async function callGeminiWithRetry<T>(
 }
 
 // 재시도할 수 없는 에러인지 확인
-function isNonRetryableError(error: any): boolean {
+function isNonRetryableError(error: { statusCode?: number; message?: string }): boolean {
   // 4xx 에러는 재시도하지 않음 (클라이언트 에러)
   if (error.statusCode && error.statusCode >= 400 && error.statusCode < 500) {
     return true;
@@ -248,7 +251,7 @@ export async function checkAPIStatus(userId?: string): Promise<{
   tokenUsage?: {
     daily: number;
     hourly: number;
-    limits: any;
+    limits: { daily: number; monthly: number };
   };
 }> {
   try {
@@ -263,13 +266,16 @@ export async function checkAPIStatus(userId?: string): Promise<{
       tokenUsage: {
         daily: usage.daily,
         hourly: usage.hourly,
-        limits: usage.limits,
+        limits: {
+          ...usage.limits,
+          monthly: usage.limits.daily * 30, // 월간 제한을 일간 제한의 30배로 설정
+        },
       },
     };
   } catch (error) {
     // 에러 로깅
     const context = createErrorContext(userId, 'api_status_check', 'gemini-api');
-    const aiError = classifyAIError(error, context);
+    const aiError = classifyAIError(error as { name?: string; code?: string; message?: string; status?: number }, context);
     if (aiError) {
       logAIError(aiError, { userId, action: 'api_status_check', component: 'gemini-api' });
     }

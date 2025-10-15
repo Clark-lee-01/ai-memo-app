@@ -10,6 +10,7 @@ import { signOutAction } from '@/app/actions/auth'
 import { getNotes } from '@/app/actions/notes'
 import { NoteCard } from '@/components/notes/note-card'
 import { EmptyState } from '@/components/notes/empty-state'
+import { Note } from '@/lib/types/notes'
 import Link from 'next/link'
 import { Plus, FileText, List, Clock } from 'lucide-react'
 
@@ -22,7 +23,7 @@ export default async function Home() {
   }
 
   // 최근 노트 6개 가져오기
-  let recentNotes = []
+  let recentNotes: Note[] = []
   try {
     const { notes } = await getNotes({ 
       page: 1, 
@@ -133,9 +134,9 @@ export default async function Home() {
               />
             ) : (
               <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                {recentNotes.map((note) => (
-                  <NoteCard key={note.id} note={note} />
-                ))}
+                 {recentNotes.map((note: Note) => (
+                   <NoteCard key={note.id} note={note} />
+                 ))}
               </div>
             )}
           </div>

@@ -14,7 +14,7 @@ import { Users, BarChart3, Settings, AlertTriangle } from 'lucide-react';
 
 // 관리자 권한 확인
 async function checkAdminAccess() {
-  const supabase = createServerClient();
+  const supabase = await createServerClient();
   
   const { data: { user }, error: authError } = await supabase.auth.getUser();
   

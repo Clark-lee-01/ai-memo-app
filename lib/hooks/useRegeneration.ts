@@ -15,12 +15,12 @@ export type RegenerationType = 'summary' | 'tags';
 export interface RegenerationOptions {
   overwrite?: boolean;
   showConfirmation?: boolean;
-  onSuccess?: (result: any) => void;
-  onError?: (error: any) => void;
+  onSuccess?: (result: { success: boolean; content?: string }) => void;
+  onError?: (error: { message: string }) => void;
 }
 
 // 재생성 함수 타입 정의
-export type RegenerationFunction = (overwrite: boolean) => Promise<any>;
+export type RegenerationFunction = (overwrite: boolean) => Promise<{ success: boolean; content?: string }>;
 
 // useRegeneration 훅
 export function useRegeneration(
@@ -52,18 +52,19 @@ export function useRegeneration(
         onSuccess?.(result);
       } else {
         // 기존 결과가 있는 경우 덮어쓰기 확인
-        if (result.hasExisting && showConfirmation) {
+        if (showConfirmation) {
           setShowOverwriteDialog(true);
           setPendingOverwrite(true);
           aiStatus.reset();
         } else {
-          aiStatus.markError(new Error(result.error || '재생성에 실패했습니다.'));
-          onError?.(result);
+          aiStatus.markError(new Error('재생성에 실패했습니다.'));
+          onError?.({ message: '재생성에 실패했습니다.' });
         }
       }
     } catch (error) {
-      aiStatus.markError(error);
-      onError?.(error);
+      const errorMessage = error instanceof Error ? error.message : '알 수 없는 오류가 발생했습니다.';
+      aiStatus.markError({ message: errorMessage });
+      onError?.({ message: errorMessage });
     }
   }, [regenerationFunction, showConfirmation, onSuccess, onError, aiStatus]);
 

@@ -71,7 +71,7 @@ function aiStatusReducer(state: AIStatusState, action: AIStatusAction): AIStatus
 }
 
 // 에러 메시지 생성 함수
-function createErrorMessage(error: any): { message: string; type: AIErrorType } {
+function createErrorMessage(error: { message?: string }): { message: string; type: AIErrorType } {
   if (error?.message?.includes('네트워크') || error?.message?.includes('Network')) {
     return {
       message: '네트워크 연결을 확인해주세요. 잠시 후 다시 시도해주세요.',
@@ -126,7 +126,7 @@ export function useAIStatus() {
   }, []);
 
   // AI 처리 에러
-  const markError = useCallback((error: any) => {
+  const markError = useCallback((error: { message?: string }) => {
     const { message, type } = createErrorMessage(error);
     setState(prev => aiStatusReducer(prev, { type: 'ERROR', error: message, errorType: type }));
   }, []);

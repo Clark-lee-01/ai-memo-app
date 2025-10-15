@@ -31,12 +31,12 @@ export function SummarySection({ noteId, initialSummary }: SummarySectionProps) 
   const aiStatus = useAIStatus();
 
   // 재생성 함수 정의
-  const regenerationFunction = async (overwrite: boolean) => {
+  const regenerationFunction = async (overwrite: boolean): Promise<{ success: boolean; content?: string; error?: string }> => {
     return new Promise((resolve) => {
       startTransition(async () => {
         try {
           const result = await generateNoteSummary(noteId, overwrite);
-          resolve(result);
+          resolve({ success: result.success, content: result.summary, error: result.error });
         } catch (error) {
           resolve({ success: false, error: error instanceof Error ? error.message : '알 수 없는 오류가 발생했습니다.' });
         }
@@ -47,9 +47,9 @@ export function SummarySection({ noteId, initialSummary }: SummarySectionProps) 
   // 재생성 훅 사용
   const regeneration = useRegeneration('summary', regenerationFunction, {
     onSuccess: (result) => {
-      if (result.success && result.summary) {
+      if (result.success && result.content) {
         setSummary({
-          content: result.summary,
+          content: result.content,
           createdAt: new Date(),
         });
       }
@@ -90,7 +90,7 @@ export function SummarySection({ noteId, initialSummary }: SummarySectionProps) 
           }
         }
       } catch (err) {
-        aiStatus.markError(err);
+        aiStatus.markError(err instanceof Error ? err : new Error('알 수 없는 오류가 발생했습니다.'));
       }
     });
   };

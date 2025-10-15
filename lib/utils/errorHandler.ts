@@ -4,7 +4,9 @@
 
 import { AuthError, AIError, ErrorCategory, ErrorSeverity, ErrorContext, ErrorRecoveryOptions, SUPABASE_AUTH_ERRORS, SupabaseAuthErrorCode, AI_ERRORS, AIErrorCode } from '@/lib/types/errors';
 
-export function classifyError(error: any, context: ErrorContext): AuthError {
+export type { AuthError, AIError, ErrorCategory, ErrorSeverity, ErrorContext, ErrorRecoveryOptions };
+
+export function classifyError(error: { name?: string; code?: string; message?: string; status?: number }, context: ErrorContext): AuthError {
   const timestamp = new Date();
   
   // AI 에러 처리 (우선순위)
@@ -27,7 +29,7 @@ export function classifyError(error: any, context: ErrorContext): AuthError {
         timestamp,
         userId: context.userId,
         retryable: errorInfo.retryable,
-        retryAfter: errorInfo.retryAfter,
+        retryAfter: 'retryAfter' in errorInfo ? errorInfo.retryAfter : undefined,
       };
     }
   }
@@ -37,7 +39,7 @@ export function classifyError(error: any, context: ErrorContext): AuthError {
     return {
       code: 'network_error',
       message: '네트워크 연결에 문제가 있습니다. 인터넷 연결을 확인해주세요.',
-      category: 'network',
+      category: 'system',
       severity: 'error',
       originalError: error,
       timestamp,
@@ -96,12 +98,12 @@ export function extractSupabaseErrorCode(message: string): string | null {
   return null;
 }
 
-export function isNetworkError(error: any): boolean {
+export function isNetworkError(error: { name?: string; code?: string; message?: string }): boolean {
   if (!error) return false;
   return (
     error.name === 'NetworkError' ||
     error.code === 'NETWORK_ERROR' ||
-    (error.message && (
+    (!!error.message && (
       error.message.toLowerCase().includes('network') ||
       error.message.toLowerCase().includes('fetch') ||
       error.message.toLowerCase().includes('connection')
@@ -109,12 +111,12 @@ export function isNetworkError(error: any): boolean {
   );
 }
 
-export function isServerError(error: any): boolean {
+export function isServerError(error: { status?: number; code?: string; message?: string }): boolean {
   if (!error) return false;
   return (
     (typeof error.status === 'number' && error.status >= 500) ||
     (typeof error.code === 'string' && error.code.startsWith('5')) ||
-    (error.message && (
+    (!!error.message && (
       error.message.toLowerCase().includes('server') ||
       error.message.toLowerCase().includes('internal')
     ))
@@ -227,7 +229,7 @@ export function createErrorContext(
 }
 
 // AI 에러 분류 함수
-export function classifyAIError(error: any, context: ErrorContext): AIError | null {
+export function classifyAIError(error: { name?: string; code?: string; message?: string; status?: number }, context: ErrorContext): AIError | null {
   const timestamp = new Date();
   
   // Gemini API 에러 코드 매핑
@@ -237,20 +239,20 @@ export function classifyAIError(error: any, context: ErrorContext): AIError | nu
     return {
       code: errorCode,
       message: errorInfo.message,
-      category: errorInfo.category,
+      category: errorInfo.category as 'ai' | 'api' | 'token' | 'data' | 'system',
       severity: errorInfo.severity,
       originalError: error,
       timestamp,
       userId: context.userId,
       retryable: errorInfo.retryable,
-      retryAfter: errorInfo.retryAfter,
+      retryAfter: 'retryAfter' in errorInfo ? errorInfo.retryAfter : undefined,
       apiEndpoint: context.action,
       retryCount: 0,
     };
   }
   
   // HTTP 상태 코드 기반 분류
-  if (error.statusCode) {
+  if (error.status) {
     return classifyByStatusCode(error, context);
   }
   
@@ -263,7 +265,7 @@ export function classifyAIError(error: any, context: ErrorContext): AIError | nu
 }
 
 // AI 에러 코드 추출
-export function extractAIErrorCode(error: any): string | null {
+export function extractAIErrorCode(error: { code?: string; message?: string }): string | null {
   if (!error) return null;
   
   // Gemini API 에러 코드 패턴
@@ -295,16 +297,16 @@ export function extractAIErrorCode(error: any): string | null {
 }
 
 // HTTP 상태 코드 기반 분류
-function classifyByStatusCode(error: any, context: ErrorContext): AIError | null {
+function classifyByStatusCode(error: { status?: number; message?: string }, context: ErrorContext): AIError | null {
   const timestamp = new Date();
-  const statusCode = error.statusCode || error.status;
+  const statusCode = error.status;
   
   switch (statusCode) {
     case 400:
       return {
         code: 'invalid_request',
         message: '잘못된 요청입니다. 입력 데이터를 확인해주세요.',
-        category: 'client',
+        category: 'api',
         severity: 'error',
         originalError: error,
         timestamp,
@@ -364,7 +366,7 @@ function classifyByStatusCode(error: any, context: ErrorContext): AIError | null
       return {
         code: 'api_server_error',
         message: 'AI 서버에 일시적인 문제가 발생했습니다. 잠시 후 다시 시도해주세요.',
-        category: 'server',
+        category: 'system',
         severity: 'critical',
         originalError: error,
         timestamp,
@@ -381,7 +383,7 @@ function classifyByStatusCode(error: any, context: ErrorContext): AIError | null
 }
 
 // 에러 메시지 패턴 기반 분류
-function classifyByMessagePattern(error: any, context: ErrorContext): AIError | null {
+function classifyByMessagePattern(error: { message?: string }, context: ErrorContext): AIError | null {
   const timestamp = new Date();
   const message = error.message || '';
   
@@ -389,7 +391,7 @@ function classifyByMessagePattern(error: any, context: ErrorContext): AIError | 
     return {
       code: 'network_connection_failed',
       message: '네트워크 연결에 실패했습니다. 인터넷 연결을 확인해주세요.',
-      category: 'network',
+      category: 'system',
       severity: 'error',
       originalError: error,
       timestamp,
@@ -405,7 +407,7 @@ function classifyByMessagePattern(error: any, context: ErrorContext): AIError | 
     return {
       code: 'api_timeout',
       message: 'API 응답 시간이 초과되었습니다. 네트워크 상태를 확인해주세요.',
-      category: 'network',
+      category: 'system',
       severity: 'error',
       originalError: error,
       timestamp,

@@ -95,7 +95,7 @@ export class AIFallbackProvider {
           )
           .sort((a, b) => a.priority - b.priority);
           
-      case 'server':
+      case 'api':
         // 서버 에러의 경우 재시도 옵션 포함
         return availableOptions
           .filter(option => 
@@ -104,7 +104,7 @@ export class AIFallbackProvider {
           )
           .sort((a, b) => a.priority - b.priority);
           
-      case 'network':
+      case 'api':
         // 네트워크 에러의 경우 재시도 우선
         return availableOptions
           .filter(option => 

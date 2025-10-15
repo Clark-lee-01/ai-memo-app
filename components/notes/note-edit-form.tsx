@@ -61,8 +61,8 @@ export function NoteEditForm({ noteId, initialData }: NoteEditFormProps) {
   const validateField = (field: 'title' | 'content', value: string) => {
     const validation = validateNoteForm({ title, content: field === 'content' ? value : content });
     
-    if (!validation.success && validation.error?.errors) {
-      const fieldError = validation.error.errors.find(err => err.path.includes(field));
+    if (!validation.success && validation.error?.issues) {
+      const fieldError = validation.error.issues.find(err => err.path.includes(field));
       return fieldError?.message;
     }
     
@@ -108,7 +108,7 @@ export function NoteEditForm({ noteId, initialData }: NoteEditFormProps) {
     const validation = validateNoteForm({ title, content });
     if (!validation.success) {
       const newErrors: NoteFormErrors = {};
-      validation.error.errors.forEach(err => {
+      validation.error.issues.forEach(err => {
         const field = err.path[0] as keyof NoteFormErrors;
         newErrors[field] = err.message;
       });

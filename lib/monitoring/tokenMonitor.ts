@@ -276,11 +276,11 @@ export const tokenMonitor = new TokenMonitor();
 
 // 토큰 사용량 추적 데코레이터
 export function trackTokenUsage(operation: string) {
-  return function (target: any, propertyName: string, descriptor: PropertyDescriptor) {
+  return function (target: object, propertyName: string, descriptor: PropertyDescriptor) {
     const method = descriptor.value;
     
-    descriptor.value = async function (...args: any[]) {
-      const userId = args[0]?.userId || args[1]?.userId;
+    descriptor.value = async function (...args: unknown[]) {
+      const userId = (args[0] as { userId?: string })?.userId || (args[1] as { userId?: string })?.userId;
       
       // 요청 전 검증
       const validation = tokenMonitor.validateRequest(8000, userId); // 기본 8k 토큰 추정

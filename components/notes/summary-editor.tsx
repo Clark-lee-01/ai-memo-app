@@ -32,7 +32,9 @@ export function SummaryEditor({ noteId, initialContent, onSave, onCancel }: Summ
   // 편집 훅 사용
   const editing = useEditing('summary', updateFunction, {
     onSave: (result) => {
-      onSave(result.summary.content);
+      if (result.summary) {
+        onSave(result.summary);
+      }
     },
     onCancel: () => {
       onCancel();
@@ -44,13 +46,13 @@ export function SummaryEditor({ noteId, initialContent, onSave, onCancel }: Summ
 
   // 편집 시작
   useEffect(() => {
-    editing.startEditing({ content: initialContent });
+    editing.startEditing({ title: '', content: '', summary: initialContent });
   }, [initialContent, editing]);
 
   // 내용 변경 처리
   const handleContentChange = (value: string) => {
     setContent(value);
-    editing.handleDataChange({ content: value });
+    editing.handleDataChange({ title: '', content: '', summary: value });
   };
 
   // 저장 처리

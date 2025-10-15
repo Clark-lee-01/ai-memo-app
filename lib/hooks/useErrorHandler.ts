@@ -34,7 +34,7 @@ export function useErrorHandler(options: UseErrorHandlerOptions = {}) {
   } = options;
 
   const handleError = useCallback((
-    error: any,
+    error: { message?: string; code?: string; status?: number },
     context: Partial<ErrorContext> = {}
   ): AuthError => {
     const errorContext = createErrorContext(
@@ -82,7 +82,7 @@ export function useErrorHandler(options: UseErrorHandlerOptions = {}) {
       return true;
     } catch (retryError) {
       // 재시도 실패 시 새로운 에러로 처리
-      handleError(retryError, {
+      handleError(retryError instanceof Error ? retryError : new Error('재시도 중 오류가 발생했습니다.'), {
         action: `retry_${error.code}`,
         component: 'useErrorHandler',
       });

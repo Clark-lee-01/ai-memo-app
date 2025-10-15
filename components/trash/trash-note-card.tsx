@@ -19,7 +19,7 @@ interface TrashNoteCardProps {
     id: string;
     title: string;
     content: string | null;
-    deletedAt: Date;
+    deletedAt: Date | null;
     createdAt: Date;
     updatedAt: Date;
   };
@@ -36,9 +36,9 @@ export function TrashNoteCard({ note }: TrashNoteCardProps) {
       try {
         await restoreNote(note.id);
         router.refresh();
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error('노트 복구 에러:', err);
-        setError(err.message || '노트 복구 중 오류가 발생했습니다.');
+        setError(err instanceof Error ? err.message : '노트 복구 중 오류가 발생했습니다.');
       }
     });
   };
@@ -53,17 +53,17 @@ export function TrashNoteCard({ note }: TrashNoteCardProps) {
       try {
         await permanentlyDeleteNote(note.id);
         router.refresh();
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error('노트 영구 삭제 에러:', err);
-        setError(err.message || '노트 영구 삭제 중 오류가 발생했습니다.');
+        setError(err instanceof Error ? err.message : '노트 영구 삭제 중 오류가 발생했습니다.');
       }
     });
   };
 
-  const deletedTimeAgo = formatDistanceToNow(new Date(note.deletedAt), { 
+  const deletedTimeAgo = note.deletedAt ? formatDistanceToNow(new Date(note.deletedAt), { 
     addSuffix: true, 
     locale: ko 
-  });
+  }) : '알 수 없음';
 
   return (
     <Card className="h-full border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/20">

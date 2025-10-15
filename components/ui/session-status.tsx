@@ -8,6 +8,7 @@ import { useAuth } from '@/lib/hooks/useAuth';
 import { formatTimeUntilExpiry } from '@/lib/utils/session';
 import { extractSessionInfo } from '@/lib/utils/session';
 import { createBrowserClient } from '@/lib/supabase/client';
+import { SessionInfo } from '@/lib/types/auth';
 import { useEffect, useState } from 'react';
 
 interface SessionStatusProps {
@@ -17,8 +18,11 @@ interface SessionStatusProps {
 
 export function SessionStatus({ showDetails = false, className = '' }: SessionStatusProps) {
   const { user, loading, authState } = useAuth();
-  const [sessionInfo, setSessionInfo] = useState<any>(null);
-  const supabase = createBrowserClient();
+  const [sessionInfo, setSessionInfo] = useState<SessionInfo | null>(null);
+  const supabase = createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  );
 
   useEffect(() => {
     if (!user) return;

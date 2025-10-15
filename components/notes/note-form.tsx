@@ -44,7 +44,7 @@ export function NoteForm({
   const [errors, setErrors] = useState<NoteFormErrors>({});
   const [isPending, startTransition] = useTransition();
   const [showRecoveryDialog, setShowRecoveryDialog] = useState(false);
-  const [tempData, setTempData] = useState<any>(null);
+  const [tempData, setTempData] = useState<{ data: { title: string; content: string; }; timestamp: string; userId: string; noteId?: string; } | null>(null);
   const router = useRouter();
 
   // 자동 저장 함수 (수정 모드일 때만)
@@ -120,8 +120,8 @@ export function NoteForm({
   const validateField = (field: 'title' | 'content', value: string) => {
     const validation = validateNoteForm({ title, content: field === 'content' ? value : content });
     
-    if (!validation.success && validation.error?.errors) {
-      const fieldError = validation.error.errors.find(err => err.path.includes(field));
+    if (!validation.success && validation.error?.issues) {
+      const fieldError = validation.error.issues.find(err => err.path.includes(field));
       return fieldError?.message;
     }
     
@@ -160,7 +160,7 @@ export function NoteForm({
     const validation = validateNoteForm({ title, content });
     if (!validation.success) {
       const newErrors: NoteFormErrors = {};
-      validation.error.errors.forEach(err => {
+      validation.error.issues.forEach(err => {
         const field = err.path[0] as keyof NoteFormErrors;
         newErrors[field] = err.message;
       });

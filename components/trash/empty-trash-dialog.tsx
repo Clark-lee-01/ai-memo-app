@@ -36,9 +36,9 @@ export function EmptyTrashDialog({ open, onOpenChange, totalCount }: EmptyTrashD
         await emptyTrash();
         onOpenChange(false);
         router.refresh();
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error('휴지통 비우기 에러:', err);
-        setError(err.message || '휴지통 비우기 중 오류가 발생했습니다.');
+        setError(err instanceof Error ? err.message : '휴지통 비우기 중 오류가 발생했습니다.');
       }
     });
   };

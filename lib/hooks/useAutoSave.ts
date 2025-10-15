@@ -14,8 +14,8 @@ export interface SaveStatus {
 }
 
 export interface UseAutoSaveOptions {
-  data: any;
-  onSave?: (data: any) => Promise<void>; // 서버 저장 (선택적)
+  data: { title: string; content: string; summary?: string; tags?: string[] };
+  onSave?: (data: { title: string; content: string; summary?: string; tags?: string[] }) => Promise<void>; // 서버 저장 (선택적)
   debounceMs?: number;
   intervalMs?: number;
   enabled?: boolean;
@@ -35,8 +35,8 @@ export function useAutoSave({
   const [saveStatus, setSaveStatus] = useState<SaveStatus>({ status: 'idle' });
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   
-  const debounceTimeoutRef = useRef<NodeJS.Timeout>();
-  const intervalRef = useRef<NodeJS.Timeout>();
+  const debounceTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined);
+  const intervalRef = useRef<NodeJS.Timeout | undefined>(undefined);
   const lastSavedDataRef = useRef(data);
   const isSavingRef = useRef(false);
 

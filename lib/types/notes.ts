@@ -3,7 +3,7 @@
 // AI 메모장 프로젝트의 노트 관리 시스템 타입
 
 import { InferSelectModel, InferInsertModel } from 'drizzle-orm';
-import { notes } from '../drizzle/schema';
+import { notes } from '../../drizzle/schema';
 
 // 기본 노트 타입 정의
 export type Note = InferSelectModel<typeof notes>;

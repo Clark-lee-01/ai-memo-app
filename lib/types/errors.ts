@@ -24,7 +24,7 @@ export interface AuthError {
   message: string;
   category: ErrorCategory;
   severity: ErrorSeverity;
-  originalError?: Error;
+  originalError?: unknown;
   timestamp: Date;
   userId?: string;
   retryable: boolean;

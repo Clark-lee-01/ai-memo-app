@@ -15,7 +15,7 @@ const GEMINI_COST_PER_OUTPUT_TOKEN = 0.0000015; // $1.50 per 1M tokens
 export async function GET(request: NextRequest) {
   try {
     // Supabase 클라이언트 생성
-    const supabase = createServerClient();
+    const supabase = await createServerClient();
     
     // 사용자 인증 확인
     const { data: { user }, error: authError } = await supabase.auth.getUser();
@@ -61,7 +61,7 @@ export async function GET(request: NextRequest) {
 }
 
 // 비용 데이터 계산
-function calculateCostData(usage: any, stats: any) {
+function calculateCostData(usage: { daily: number; hourly: number; limits: { daily: number }; stats: { totalUsage: number; averageDaily: number } }, stats: { totalUsage: number; averageDaily: number; peakHourly: number; operations: { [key: string]: number } }) {
   // 현재 비용 계산 (이번 달)
   const currentMonthUsage = usage.daily * 30; // 대략적인 월간 사용량
   const inputCost = currentMonthUsage * GEMINI_COST_PER_INPUT_TOKEN;
@@ -102,7 +102,7 @@ function calculateCostData(usage: any, stats: any) {
 }
 
 // 최적화 제안 생성
-function generateOptimizationSuggestions(usage: any, stats: any) {
+function generateOptimizationSuggestions(usage: { daily: number; hourly: number; limits: { daily: number }; stats: { totalUsage: number; averageDaily: number } }, stats: { totalUsage: number; averageDaily: number; peakHourly: number; operations: { [key: string]: number } }) {
   const suggestions = [];
   
   // 사용량이 높은 경우
@@ -117,7 +117,7 @@ function generateOptimizationSuggestions(usage: any, stats: any) {
   }
   
   // 요청당 토큰이 많은 경우
-  if (stats.peakHourly > usage.limits.hourly * 0.9) {
+  if (stats.peakHourly > usage.daily * 0.9) {
     suggestions.push({
       type: 'optimize',
       title: '요청 최적화',

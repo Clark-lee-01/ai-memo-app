@@ -27,10 +27,10 @@ export default function TagsSection({ noteId, initialTags = [] }: TagsSectionPro
   const aiStatus = useAIStatus();
 
   // 재생성 함수 정의
-  const regenerationFunction = async (overwrite: boolean) => {
+  const regenerationFunction = async (overwrite: boolean): Promise<{ success: boolean; content?: string; error?: string }> => {
     try {
       const result = await generateNoteTags(noteId, overwrite);
-      return result;
+      return { success: result.success, content: result.tags ? JSON.stringify(result.tags) : undefined, error: result.error };
     } catch (error) {
       return { 
         success: false, 
@@ -42,8 +42,8 @@ export default function TagsSection({ noteId, initialTags = [] }: TagsSectionPro
   // 재생성 훅 사용
   const regeneration = useRegeneration('tags', regenerationFunction, {
     onSuccess: (result) => {
-      if (result.success && result.tags) {
-        setTags(result.tags);
+      if (result.success && result.content) {
+        setTags(JSON.parse(result.content));
       }
     },
     onError: (error) => {
@@ -71,7 +71,7 @@ export default function TagsSection({ noteId, initialTags = [] }: TagsSectionPro
         }
       }
     } catch (err) {
-      aiStatus.markError(err);
+      aiStatus.markError(err instanceof Error ? err : new Error('알 수 없는 오류가 발생했습니다.'));
     }
   };
 

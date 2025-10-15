@@ -39,7 +39,7 @@ export async function createNote(formData: FormData): Promise<NoteCreateResult> 
     if (!validation.success) {
       return {
         success: false,
-        error: validation.error.errors[0]?.message || '입력 데이터가 유효하지 않습니다',
+        error: validation.error.issues[0]?.message || '입력 데이터가 유효하지 않습니다',
       };
     }
 
@@ -228,7 +228,7 @@ export async function updateNote(noteId: string, formData: FormData) {
 
     const validation = validateNoteUpdate(rawData);
     if (!validation.success) {
-      throw new Error(validation.error.errors[0]?.message || '입력 데이터가 유효하지 않습니다');
+      throw new Error(validation.error.issues[0]?.message || '입력 데이터가 유효하지 않습니다');
     }
 
     const updateData = validation.data;
@@ -681,7 +681,7 @@ export async function getNoteTags(noteId: string) {
 }
 
 // 요약 업데이트
-export async function updateNoteSummary(noteId: string, content: string): Promise<{ success: boolean; error?: string; summary?: any }> {
+export async function updateNoteSummary(noteId: string, content: string): Promise<{ success: boolean; error?: string; summary?: string }> {
   try {
     // 사용자 인증 확인
     const supabase = await createServerClient();
@@ -738,16 +738,18 @@ export async function updateNoteSummary(noteId: string, content: string): Promis
         .update(summaries)
         .set({
           content: content.trim(),
-          updatedAt: new Date(),
         })
-        .where(eq(summaries.id, existingSummary.id));
+        .where(and(
+          eq(summaries.noteId, existingSummary.noteId),
+          eq(summaries.model, existingSummary.model)
+        ));
     } else {
       // 새 요약 생성
       await db.insert(summaries).values({
         noteId,
+        model: 'gemini-1.5-flash',
         content: content.trim(),
         createdAt: new Date(),
-        updatedAt: new Date(),
       });
     }
 
@@ -756,10 +758,7 @@ export async function updateNoteSummary(noteId: string, content: string): Promis
 
     return {
       success: true,
-      summary: {
-        content: content.trim(),
-        createdAt: new Date(),
-      },
+      summary: content.trim(),
     };
   } catch (error) {
     console.error('요약 업데이트 에러:', error);

@@ -31,7 +31,7 @@ export async function tokenLimitMiddleware(
       if (strictMode) {
         const error: AIError = {
           code: 'token_limit_exceeded',
-          message: validation.errors.join(' '),
+          message: validation.error?.message || '토큰 제한을 초과했습니다.',
           category: 'token',
           severity: 'error',
           timestamp: new Date(),
@@ -109,7 +109,7 @@ export async function checkTokenLimit(
     if (!validation.allowed) {
       const error: AIError = {
         code: 'token_limit_exceeded',
-        message: validation.errors.join(' '),
+        message: validation.error?.message || '토큰 제한을 초과했습니다.',
         category: 'token',
         severity: 'error',
         timestamp: new Date(),

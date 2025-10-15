@@ -11,7 +11,7 @@ import { tokenMonitor } from '@/lib/monitoring/tokenMonitor';
 export async function GET(request: NextRequest) {
   try {
     // Supabase 클라이언트 생성
-    const supabase = createServerClient();
+    const supabase = await createServerClient();
     
     // 사용자 인증 확인
     const { data: { user }, error: authError } = await supabase.auth.getUser();

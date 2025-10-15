@@ -6,8 +6,8 @@
 
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { AuthError, ErrorRecoveryOptions, getErrorRecoveryOptions } from '@/lib/types/errors';
-import { getRetryDelay, shouldRetry } from '@/lib/utils/errorHandler';
+import { AuthError, ErrorRecoveryOptions } from '@/lib/types/errors';
+import { getRetryDelay, shouldRetry, getErrorRecoveryOptions } from '@/lib/utils/errorHandler';
 
 interface ErrorMessageProps {
   error: AuthError;

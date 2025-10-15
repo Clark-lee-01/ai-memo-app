@@ -26,8 +26,8 @@ export function TagsEditor({ noteId, initialTags, onSave, onCancel }: TagsEditor
   const [newTag, setNewTag] = useState('');
 
   // 편집 함수 정의
-  const updateFunction = async (data: { tags: string[] }) => {
-    const result = await updateNoteTags(noteId, data.tags);
+  const updateFunction = async (data: { title: string; content: string; summary?: string; tags?: string[] }) => {
+    const result = await updateNoteTags(noteId, data.tags || []);
     return result;
   };
 
@@ -46,7 +46,7 @@ export function TagsEditor({ noteId, initialTags, onSave, onCancel }: TagsEditor
 
   // 편집 시작
   useEffect(() => {
-    editing.startEditing({ tags: initialTags });
+    editing.startEditing({ title: '', content: '', tags: initialTags });
   }, [initialTags, editing]);
 
   // 태그 추가
@@ -56,7 +56,7 @@ export function TagsEditor({ noteId, initialTags, onSave, onCancel }: TagsEditor
       const newTags = [...tags, trimmedTag];
       setTags(newTags);
       setNewTag('');
-      editing.handleDataChange({ tags: newTags });
+      editing.handleDataChange({ title: '', content: '', tags: newTags });
     }
   };
 
@@ -64,7 +64,7 @@ export function TagsEditor({ noteId, initialTags, onSave, onCancel }: TagsEditor
   const handleRemoveTag = (tagToRemove: string) => {
     const newTags = tags.filter(tag => tag !== tagToRemove);
     setTags(newTags);
-    editing.handleDataChange({ tags: newTags });
+    editing.handleDataChange({ title: '', content: '', tags: newTags });
   };
 
   // 엔터키로 태그 추가
