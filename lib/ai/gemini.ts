@@ -4,6 +4,10 @@
 // 관련 파일: app/actions/notes.ts, lib/types/notes.ts
 
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import { classifyAIError, createErrorContext } from '@/lib/utils/errorHandler';
+import { tokenMonitor } from '@/lib/monitoring/tokenMonitor';
+import { logAIError } from '@/lib/monitoring/errorLogger';
+import { AIError } from '@/lib/types/errors';
 
 // Gemini API 클라이언트 초기화
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
@@ -54,25 +58,68 @@ export class GeminiAPIError extends Error {
 async function callGeminiWithRetry<T>(
   operation: () => Promise<T>,
   maxRetries: number = 3,
-  delay: number = 1000
+  delay: number = 1000,
+  userId?: string,
+  operationType: string = 'api_call'
 ): Promise<T> {
   let lastError: Error;
+  let lastAIError: AIError | null = null;
   
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      return await operation();
+      const result = await operation();
+      
+      // 성공 시 토큰 사용량 기록 (실제 사용량이 있다면)
+      if (result && typeof result === 'object' && 'tokenUsage' in result) {
+        tokenMonitor.recordUsage({
+          ...(result as any).tokenUsage,
+          operation: operationType,
+          userId,
+        });
+      }
+      
+      return result;
     } catch (error) {
       lastError = error as Error;
       
-      // 마지막 시도이거나 재시도할 수 없는 에러인 경우
-      if (attempt === maxRetries || isNonRetryableError(error)) {
-        break;
-      }
+      // AI 에러로 분류
+      const context = createErrorContext(userId, operationType, 'gemini-api');
+      const aiError = classifyAIError(error, context);
       
-      // 지수 백오프로 대기
-      const waitTime = delay * Math.pow(2, attempt - 1);
-      await new Promise(resolve => setTimeout(resolve, waitTime));
+      if (aiError) {
+        lastAIError = aiError;
+        
+        // 에러 로깅
+        logAIError(aiError, {
+          userId,
+          action: operationType,
+          component: 'gemini-api',
+        });
+        
+        // 재시도할 수 없는 에러인 경우
+        if (!aiError.retryable || attempt === maxRetries) {
+          break;
+        }
+        
+        // 재시도 대기 시간 계산
+        const waitTime = aiError.retryAfter || delay * Math.pow(2, attempt - 1);
+        await new Promise(resolve => setTimeout(resolve, waitTime));
+      } else {
+        // 일반 에러 처리
+        if (attempt === maxRetries || isNonRetryableError(error)) {
+          break;
+        }
+        
+        // 지수 백오프로 대기
+        const waitTime = delay * Math.pow(2, attempt - 1);
+        await new Promise(resolve => setTimeout(resolve, waitTime));
+      }
     }
+  }
+  
+  // 최종 에러 생성
+  if (lastAIError) {
+    throw lastAIError;
   }
   
   throw new GeminiAPIError(
@@ -97,11 +144,33 @@ function isNonRetryableError(error: any): boolean {
 }
 
 // 기본 API 호출 함수
-export async function generateContent(prompt: string): Promise<string> {
+export async function generateContent(
+  prompt: string, 
+  userId?: string,
+  operationType: string = 'generate_content'
+): Promise<string> {
   // 토큰 길이 검증
   const validation = validateTextLength(prompt);
   if (!validation.isValid) {
+    const context = createErrorContext(userId, operationType, 'gemini-api');
+    const aiError = classifyAIError(
+      new Error(validation.error!), 
+      context
+    );
+    if (aiError) {
+      logAIError(aiError, { userId, action: operationType, component: 'gemini-api' });
+      throw aiError;
+    }
     throw new GeminiAPIError(validation.error!, 'TOKEN_LIMIT_EXCEEDED');
+  }
+  
+  // 토큰 사용량 사전 검증
+  const tokenValidation = tokenMonitor.validateRequest(validation.tokenCount, userId);
+  if (!tokenValidation.allowed) {
+    if (tokenValidation.error) {
+      logAIError(tokenValidation.error, { userId, action: operationType, component: 'gemini-api' });
+      throw tokenValidation.error;
+    }
   }
   
   return callGeminiWithRetry(async () => {
@@ -119,30 +188,48 @@ export async function generateContent(prompt: string): Promise<string> {
       throw new GeminiAPIError('API 응답이 비어있습니다', 'EMPTY_RESPONSE');
     }
     
-    return response.text();
-  });
+    const text = response.text();
+    
+    // 토큰 사용량 기록
+    const estimatedOutputTokens = Math.ceil(text.length / 3.5); // 대략적인 출력 토큰 계산
+    tokenMonitor.recordUsage({
+      input: validation.tokenCount,
+      output: estimatedOutputTokens,
+      total: validation.tokenCount + estimatedOutputTokens,
+      operation: operationType,
+      userId,
+    });
+    
+    return text;
+  }, 3, 1000, userId, operationType);
 }
 
 // 노트 요약 생성 함수
-export async function generateSummary(noteContent: string): Promise<string> {
+export async function generateSummary(
+  noteContent: string, 
+  userId?: string
+): Promise<string> {
   const prompt = `다음 노트 내용을 3-6개의 불릿 포인트로 요약해주세요. 각 포인트는 간결하고 핵심적인 내용을 담아야 합니다:
 
 ${noteContent}
 
 요약:`;
 
-  return generateContent(prompt);
+  return generateContent(prompt, userId, 'generate_summary');
 }
 
 // 노트 태그 생성 함수
-export async function generateTags(noteContent: string): Promise<string[]> {
+export async function generateTags(
+  noteContent: string, 
+  userId?: string
+): Promise<string[]> {
   const prompt = `다음 노트 내용을 분석하여 관련성 높은 태그를 최대 6개까지 생성해주세요. 태그는 쉼표로 구분하여 나열해주세요:
 
 ${noteContent}
 
 태그:`;
 
-  const response = await generateContent(prompt);
+  const response = await generateContent(prompt, userId, 'generate_tags');
   
   // 응답에서 태그 추출 및 정리
   const tags = response
@@ -155,17 +242,41 @@ ${noteContent}
 }
 
 // API 상태 확인 함수
-export async function checkAPIStatus(): Promise<{ status: 'healthy' | 'error'; message: string }> {
+export async function checkAPIStatus(userId?: string): Promise<{ 
+  status: 'healthy' | 'error'; 
+  message: string;
+  tokenUsage?: {
+    daily: number;
+    hourly: number;
+    limits: any;
+  };
+}> {
   try {
-    await generateContent('안녕하세요');
+    await generateContent('안녕하세요', userId, 'api_status_check');
+    
+    // 토큰 사용량 정보 포함
+    const usage = tokenMonitor.getUsage(userId);
+    
     return {
       status: 'healthy',
-      message: 'Gemini API가 정상적으로 작동합니다'
+      message: 'Gemini API가 정상적으로 작동합니다',
+      tokenUsage: {
+        daily: usage.daily,
+        hourly: usage.hourly,
+        limits: usage.limits,
+      },
     };
   } catch (error) {
+    // 에러 로깅
+    const context = createErrorContext(userId, 'api_status_check', 'gemini-api');
+    const aiError = classifyAIError(error, context);
+    if (aiError) {
+      logAIError(aiError, { userId, action: 'api_status_check', component: 'gemini-api' });
+    }
+    
     return {
       status: 'error',
-      message: `Gemini API 오류: ${error instanceof Error ? error.message : '알 수 없는 오류'}`
+      message: `Gemini API 오류: ${error instanceof Error ? error.message : '알 수 없는 오류'}`,
     };
   }
 }

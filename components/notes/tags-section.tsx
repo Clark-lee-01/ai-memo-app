@@ -10,10 +10,11 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { generateNoteTags, getNoteTags } from '@/app/actions/notes';
-import { Loader2, Tag, RefreshCw, CheckCircle, Clock, AlertCircle } from 'lucide-react';
+import { Loader2, Tag, RefreshCw, CheckCircle, Clock, AlertCircle, Edit } from 'lucide-react';
 import { useAIStatus } from '@/lib/hooks/useAIStatus';
 import { useRegeneration } from '@/lib/hooks/useRegeneration';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+import { TagsEditor } from './tags-editor';
 
 interface TagsSectionProps {
   noteId: string;
@@ -22,6 +23,7 @@ interface TagsSectionProps {
 
 export default function TagsSection({ noteId, initialTags = [] }: TagsSectionProps) {
   const [tags, setTags] = useState<string[]>(initialTags);
+  const [isEditing, setIsEditing] = useState(false);
   const aiStatus = useAIStatus();
 
   // 재생성 함수 정의
@@ -78,6 +80,20 @@ export default function TagsSection({ noteId, initialTags = [] }: TagsSectionPro
     regeneration.handleRegenerateClick();
   };
 
+  // 편집 핸들러
+  const handleStartEditing = () => {
+    setIsEditing(true);
+  };
+
+  const handleSaveEditing = (newTags: string[]) => {
+    setTags(newTags);
+    setIsEditing(false);
+  };
+
+  const handleCancelEditing = () => {
+    setIsEditing(false);
+  };
+
   return (
     <div className="space-y-4">
       {/* AI 처리 상태 표시 */}
@@ -127,37 +143,60 @@ export default function TagsSection({ noteId, initialTags = [] }: TagsSectionPro
           <h3 className="text-sm font-medium">태그</h3>
         </div>
         
-        {tags.length > 0 && (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleRegenerateTags}
-            disabled={!regeneration.canRegenerate}
-            className="h-8"
-          >
-            {regeneration.isRegenerating ? (
-              <Loader2 className="h-3 w-3 animate-spin mr-1" />
-            ) : (
-              <RefreshCw className="h-3 w-3 mr-1" />
-            )}
-            재생성
-          </Button>
+        {tags.length > 0 && !isEditing && (
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleStartEditing}
+              disabled={regeneration.isRegenerating}
+              className="h-8"
+            >
+              <Edit className="h-3 w-3 mr-1" />
+              편집
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleRegenerateTags}
+              disabled={!regeneration.canRegenerate}
+              className="h-8"
+            >
+              {regeneration.isRegenerating ? (
+                <Loader2 className="h-3 w-3 animate-spin mr-1" />
+              ) : (
+                <RefreshCw className="h-3 w-3 mr-1" />
+              )}
+              재생성
+            </Button>
+          </div>
         )}
       </div>
 
-      {/* 태그 목록 */}
-      {tags.length > 0 ? (
-        <div className="flex flex-wrap gap-2">
-          {tags.map((tag, index) => (
-            <Badge key={index} variant="secondary" className="text-xs">
-              {tag}
-            </Badge>
-          ))}
-        </div>
+      {/* 태그 목록 또는 편집기 */}
+      {isEditing ? (
+        <TagsEditor
+          noteId={noteId}
+          initialTags={tags}
+          onSave={handleSaveEditing}
+          onCancel={handleCancelEditing}
+        />
       ) : (
-        <div className="text-sm text-muted-foreground">
-          아직 생성된 태그가 없습니다.
-        </div>
+        <>
+          {tags.length > 0 ? (
+            <div className="flex flex-wrap gap-2">
+              {tags.map((tag, index) => (
+                <Badge key={index} variant="secondary" className="text-xs">
+                  {tag}
+                </Badge>
+              ))}
+            </div>
+          ) : (
+            <div className="text-sm text-muted-foreground">
+              아직 생성된 태그가 없습니다.
+            </div>
+          )}
+        </>
       )}
 
       {/* 태그 생성 버튼 */}

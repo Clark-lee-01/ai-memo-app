@@ -2,10 +2,16 @@
 // 에러 핸들링 유틸리티 - 에러 감지, 분류, 복구 메커니즘
 // AI 메모장 프로젝트의 에러 처리 시스템
 
-import { AuthError, ErrorCategory, ErrorSeverity, ErrorContext, ErrorRecoveryOptions, SUPABASE_AUTH_ERRORS, SupabaseAuthErrorCode } from '@/lib/types/errors';
+import { AuthError, AIError, ErrorCategory, ErrorSeverity, ErrorContext, ErrorRecoveryOptions, SUPABASE_AUTH_ERRORS, SupabaseAuthErrorCode, AI_ERRORS, AIErrorCode } from '@/lib/types/errors';
 
 export function classifyError(error: any, context: ErrorContext): AuthError {
   const timestamp = new Date();
+  
+  // AI 에러 처리 (우선순위)
+  if (error?.name === 'GeminiAPIError' || error?.code) {
+    const aiError = classifyAIError(error, context);
+    if (aiError) return aiError;
+  }
   
   // Supabase Auth 에러 처리
   if (error?.message && typeof error.message === 'string') {
@@ -172,7 +178,9 @@ export function getErrorRecoveryOptions(error: AuthError): ErrorRecoveryOptions 
     case 'server':
       return {
         ...baseOptions,
+        retry: true,
         maxRetries: 2,
+        showRetryButton: true,
         fallbackAction: '잠시 후 다시 시도',
         showFallbackButton: true,
       };
@@ -216,4 +224,198 @@ export function createErrorContext(
     userAgent: typeof window !== 'undefined' ? window.navigator.userAgent : undefined,
     timestamp: new Date(),
   };
+}
+
+// AI 에러 분류 함수
+export function classifyAIError(error: any, context: ErrorContext): AIError | null {
+  const timestamp = new Date();
+  
+  // Gemini API 에러 코드 매핑
+  const errorCode = extractAIErrorCode(error);
+  if (errorCode && errorCode in AI_ERRORS) {
+    const errorInfo = AI_ERRORS[errorCode as AIErrorCode];
+    return {
+      code: errorCode,
+      message: errorInfo.message,
+      category: errorInfo.category,
+      severity: errorInfo.severity,
+      originalError: error,
+      timestamp,
+      userId: context.userId,
+      retryable: errorInfo.retryable,
+      retryAfter: errorInfo.retryAfter,
+      apiEndpoint: context.action,
+      retryCount: 0,
+    };
+  }
+  
+  // HTTP 상태 코드 기반 분류
+  if (error.statusCode) {
+    return classifyByStatusCode(error, context);
+  }
+  
+  // 에러 메시지 패턴 기반 분류
+  if (error.message) {
+    return classifyByMessagePattern(error, context);
+  }
+  
+  return null;
+}
+
+// AI 에러 코드 추출
+export function extractAIErrorCode(error: any): string | null {
+  if (!error) return null;
+  
+  // Gemini API 에러 코드 패턴
+  const patterns = [
+    { pattern: /API key.*invalid/i, code: 'api_key_invalid' },
+    { pattern: /API key.*expired/i, code: 'api_key_expired' },
+    { pattern: /token.*limit.*exceeded/i, code: 'token_limit_exceeded' },
+    { pattern: /rate.*limit.*exceeded/i, code: 'rate_limit_exceeded' },
+    { pattern: /timeout/i, code: 'api_timeout' },
+    { pattern: /server.*error/i, code: 'api_server_error' },
+    { pattern: /quota.*exceeded/i, code: 'api_quota_exceeded' },
+    { pattern: /invalid.*response/i, code: 'invalid_response_format' },
+    { pattern: /content.*filtered/i, code: 'content_filtered' },
+    { pattern: /model.*unavailable/i, code: 'model_unavailable' },
+    { pattern: /network.*connection/i, code: 'network_connection_failed' },
+    { pattern: /dns.*resolution/i, code: 'dns_resolution_failed' },
+    { pattern: /ssl.*certificate/i, code: 'ssl_certificate_error' },
+    { pattern: /memory.*insufficient/i, code: 'memory_insufficient' },
+    { pattern: /file.*system/i, code: 'file_system_error' },
+  ];
+  
+  for (const { pattern, code } of patterns) {
+    if (pattern.test(error.message || '')) {
+      return code;
+    }
+  }
+  
+  return null;
+}
+
+// HTTP 상태 코드 기반 분류
+function classifyByStatusCode(error: any, context: ErrorContext): AIError | null {
+  const timestamp = new Date();
+  const statusCode = error.statusCode || error.status;
+  
+  switch (statusCode) {
+    case 400:
+      return {
+        code: 'invalid_request',
+        message: '잘못된 요청입니다. 입력 데이터를 확인해주세요.',
+        category: 'client',
+        severity: 'error',
+        originalError: error,
+        timestamp,
+        userId: context.userId,
+        retryable: false,
+        apiEndpoint: context.action,
+        retryCount: 0,
+      };
+      
+    case 401:
+      return {
+        code: 'api_key_invalid',
+        message: 'API 키가 유효하지 않습니다. 관리자에게 문의해주세요.',
+        category: 'api',
+        severity: 'critical',
+        originalError: error,
+        timestamp,
+        userId: context.userId,
+        retryable: false,
+        apiEndpoint: context.action,
+        retryCount: 0,
+      };
+      
+    case 403:
+      return {
+        code: 'api_quota_exceeded',
+        message: 'API 사용 한도를 초과했습니다. 내일 다시 시도해주세요.',
+        category: 'api',
+        severity: 'error',
+        originalError: error,
+        timestamp,
+        userId: context.userId,
+        retryable: false,
+        apiEndpoint: context.action,
+        retryCount: 0,
+      };
+      
+    case 429:
+      return {
+        code: 'rate_limit_exceeded',
+        message: 'API 호출 한도를 초과했습니다. 잠시 후 다시 시도해주세요.',
+        category: 'api',
+        severity: 'warning',
+        originalError: error,
+        timestamp,
+        userId: context.userId,
+        retryable: true,
+        retryAfter: 60000,
+        apiEndpoint: context.action,
+        retryCount: 0,
+      };
+      
+    case 500:
+    case 502:
+    case 503:
+    case 504:
+      return {
+        code: 'api_server_error',
+        message: 'AI 서버에 일시적인 문제가 발생했습니다. 잠시 후 다시 시도해주세요.',
+        category: 'server',
+        severity: 'critical',
+        originalError: error,
+        timestamp,
+        userId: context.userId,
+        retryable: true,
+        retryAfter: 10000,
+        apiEndpoint: context.action,
+        retryCount: 0,
+      };
+      
+    default:
+      return null;
+  }
+}
+
+// 에러 메시지 패턴 기반 분류
+function classifyByMessagePattern(error: any, context: ErrorContext): AIError | null {
+  const timestamp = new Date();
+  const message = error.message || '';
+  
+  if (message.includes('network') || message.includes('connection')) {
+    return {
+      code: 'network_connection_failed',
+      message: '네트워크 연결에 실패했습니다. 인터넷 연결을 확인해주세요.',
+      category: 'network',
+      severity: 'error',
+      originalError: error,
+      timestamp,
+      userId: context.userId,
+      retryable: true,
+      retryAfter: 5000,
+      apiEndpoint: context.action,
+      retryCount: 0,
+    };
+  }
+  
+  if (message.includes('timeout')) {
+    return {
+      code: 'api_timeout',
+      message: 'API 응답 시간이 초과되었습니다. 네트워크 상태를 확인해주세요.',
+      category: 'network',
+      severity: 'error',
+      originalError: error,
+      timestamp,
+      userId: context.userId,
+      retryable: true,
+      retryAfter: 5000,
+      apiEndpoint: context.action,
+      retryCount: 0,
+    };
+  }
+  
+  return null;
 }

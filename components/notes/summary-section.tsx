@@ -10,10 +10,11 @@ import { generateNoteSummary } from '@/app/actions/notes';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { LoaderCircle, RefreshCw, FileText, AlertCircle, CheckCircle, Clock } from 'lucide-react';
+import { LoaderCircle, RefreshCw, FileText, AlertCircle, CheckCircle, Clock, Edit } from 'lucide-react';
 import { useAIStatus } from '@/lib/hooks/useAIStatus';
 import { useRegeneration } from '@/lib/hooks/useRegeneration';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+import { SummaryEditor } from './summary-editor';
 
 interface SummarySectionProps {
   noteId: string;
@@ -25,6 +26,7 @@ interface SummarySectionProps {
 
 export function SummarySection({ noteId, initialSummary }: SummarySectionProps) {
   const [summary, setSummary] = useState(initialSummary);
+  const [isEditing, setIsEditing] = useState(false);
   const [isPending, startTransition] = useTransition();
   const aiStatus = useAIStatus();
 
@@ -97,6 +99,23 @@ export function SummarySection({ noteId, initialSummary }: SummarySectionProps) 
     regeneration.handleRegenerateClick();
   };
 
+  // 편집 핸들러
+  const handleStartEditing = () => {
+    setIsEditing(true);
+  };
+
+  const handleSaveEditing = (content: string) => {
+    setSummary({
+      content,
+      createdAt: new Date(),
+    });
+    setIsEditing(false);
+  };
+
+  const handleCancelEditing = () => {
+    setIsEditing(false);
+  };
+
   const formatSummaryContent = (content: string) => {
     // 불릿 포인트로 분리하여 표시
     return content
@@ -155,36 +174,57 @@ export function SummarySection({ noteId, initialSummary }: SummarySectionProps) 
         )}
 
         {summary ? (
-          <div className="space-y-4">
-            <div className="space-y-2">
-              {formatSummaryContent(summary.content).map((point, index) => (
-                <div key={index} className="flex items-start gap-2">
-                  <span className="text-blue-500 mt-1">•</span>
-                  <span className="text-sm text-gray-700">{point}</span>
+          isEditing ? (
+            <SummaryEditor
+              noteId={noteId}
+              initialContent={summary.content}
+              onSave={handleSaveEditing}
+              onCancel={handleCancelEditing}
+            />
+          ) : (
+            <div className="space-y-4">
+              <div className="space-y-2">
+                {formatSummaryContent(summary.content).map((point, index) => (
+                  <div key={index} className="flex items-start gap-2">
+                    <span className="text-blue-500 mt-1">•</span>
+                    <span className="text-sm text-gray-700">{point}</span>
+                  </div>
+                ))}
+              </div>
+              
+              <div className="flex items-center justify-between text-xs text-gray-500">
+                <span>
+                  생성일: {new Date(summary.createdAt).toLocaleString('ko-KR')}
+                </span>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleStartEditing}
+                    disabled={regeneration.isRegenerating || isPending}
+                    className="h-8"
+                  >
+                    <Edit className="h-3 w-3 mr-1" />
+                    편집
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleRegenerateSummary}
+                    disabled={!regeneration.canRegenerate || isPending}
+                    className="h-8"
+                  >
+                    {regeneration.isRegenerating || isPending ? (
+                      <LoaderCircle className="h-3 w-3 animate-spin mr-1" />
+                    ) : (
+                      <RefreshCw className="h-3 w-3 mr-1" />
+                    )}
+                    재생성
+                  </Button>
                 </div>
-              ))}
+              </div>
             </div>
-            
-            <div className="flex items-center justify-between text-xs text-gray-500">
-              <span>
-                생성일: {new Date(summary.createdAt).toLocaleString('ko-KR')}
-              </span>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleRegenerateSummary}
-                disabled={!regeneration.canRegenerate || isPending}
-                className="h-8"
-              >
-                {regeneration.isRegenerating || isPending ? (
-                  <LoaderCircle className="h-3 w-3 animate-spin mr-1" />
-                ) : (
-                  <RefreshCw className="h-3 w-3 mr-1" />
-                )}
-                재생성
-              </Button>
-            </div>
-          </div>
+          )
         ) : (
           <div className="text-center py-8">
             <FileText className="h-12 w-12 text-gray-300 mx-auto mb-4" />

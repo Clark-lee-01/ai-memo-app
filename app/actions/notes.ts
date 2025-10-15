@@ -679,3 +679,182 @@ export async function getNoteTags(noteId: string) {
     throw error;
   }
 }
+
+// 요약 업데이트
+export async function updateNoteSummary(noteId: string, content: string): Promise<{ success: boolean; error?: string; summary?: any }> {
+  try {
+    // 사용자 인증 확인
+    const supabase = await createServerClient();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    
+    if (authError || !user) {
+      return {
+        success: false,
+        error: '로그인이 필요합니다',
+      };
+    }
+
+    // 노트 ID 유효성 검사
+    const noteIdValidation = validateNoteId(noteId);
+    if (!noteIdValidation.success) {
+      return {
+        success: false,
+        error: '유효하지 않은 노트 ID입니다',
+      };
+    }
+
+    // 요약 내용 유효성 검사
+    if (!content || content.trim().length === 0) {
+      return {
+        success: false,
+        error: '요약 내용을 입력해주세요',
+      };
+    }
+
+    // 노트 존재 및 소유권 확인
+    const [note] = await db
+      .select()
+      .from(notes)
+      .where(and(eq(notes.id, noteId), eq(notes.userId, user.id)))
+      .limit(1);
+
+    if (!note) {
+      return {
+        success: false,
+        error: '노트를 찾을 수 없습니다',
+      };
+    }
+
+    // 기존 요약 업데이트 또는 새로 생성
+    const [existingSummary] = await db
+      .select()
+      .from(summaries)
+      .where(eq(summaries.noteId, noteId))
+      .limit(1);
+
+    if (existingSummary) {
+      // 기존 요약 업데이트
+      await db
+        .update(summaries)
+        .set({
+          content: content.trim(),
+          updatedAt: new Date(),
+        })
+        .where(eq(summaries.id, existingSummary.id));
+    } else {
+      // 새 요약 생성
+      await db.insert(summaries).values({
+        noteId,
+        content: content.trim(),
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+    }
+
+    // 경로 재검증
+    revalidatePath(`/notes/${noteId}`);
+
+    return {
+      success: true,
+      summary: {
+        content: content.trim(),
+        createdAt: new Date(),
+      },
+    };
+  } catch (error) {
+    console.error('요약 업데이트 에러:', error);
+    return {
+      success: false,
+      error: '요약 업데이트 중 오류가 발생했습니다',
+    };
+  }
+}
+
+// 태그 업데이트
+export async function updateNoteTags(noteId: string, tags: string[]): Promise<{ success: boolean; error?: string; tags?: string[] }> {
+  try {
+    // 사용자 인증 확인
+    const supabase = await createServerClient();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    
+    if (authError || !user) {
+      return {
+        success: false,
+        error: '로그인이 필요합니다',
+      };
+    }
+
+    // 노트 ID 유효성 검사
+    const noteIdValidation = validateNoteId(noteId);
+    if (!noteIdValidation.success) {
+      return {
+        success: false,
+        error: '유효하지 않은 노트 ID입니다',
+      };
+    }
+
+    // 태그 유효성 검사
+    if (!Array.isArray(tags)) {
+      return {
+        success: false,
+        error: '태그는 배열 형태여야 합니다',
+      };
+    }
+
+    // 태그 개수 제한 (최대 6개)
+    if (tags.length > 6) {
+      return {
+        success: false,
+        error: '태그는 최대 6개까지 입력할 수 있습니다',
+      };
+    }
+
+    // 노트 존재 및 소유권 확인
+    const [note] = await db
+      .select()
+      .from(notes)
+      .where(and(eq(notes.id, noteId), eq(notes.userId, user.id)))
+      .limit(1);
+
+    if (!note) {
+      return {
+        success: false,
+        error: '노트를 찾을 수 없습니다',
+      };
+    }
+
+    // 기존 태그 삭제
+    await db
+      .delete(noteTags)
+      .where(eq(noteTags.noteId, noteId));
+
+    // 새 태그 추가
+    if (tags.length > 0) {
+      const tagValues = tags
+        .filter(tag => tag && tag.trim().length > 0)
+        .map(tag => ({
+          noteId,
+          tag: tag.trim(),
+          createdAt: new Date(),
+        }));
+
+      if (tagValues.length > 0) {
+        await db.insert(noteTags).values(tagValues);
+      }
+    }
+
+    // 경로 재검증
+    revalidatePath(`/notes/${noteId}`);
+
+    return {
+      success: true,
+      tags: tags.filter(tag => tag && tag.trim().length > 0),
+    };
+  } catch (error) {
+    console.error('태그 업데이트 에러:', error);
+    return {
+      success: false,
+      error: '태그 업데이트 중 오류가 발생했습니다',
+    };
+  }
+}
