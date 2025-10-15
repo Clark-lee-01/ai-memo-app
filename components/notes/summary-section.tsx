@@ -10,7 +10,10 @@ import { generateNoteSummary } from '@/app/actions/notes';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { LoaderCircle, RefreshCw, FileText, AlertCircle } from 'lucide-react';
+import { LoaderCircle, RefreshCw, FileText, AlertCircle, CheckCircle, Clock } from 'lucide-react';
+import { useAIStatus } from '@/lib/hooks/useAIStatus';
+import { useRegeneration } from '@/lib/hooks/useRegeneration';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 
 interface SummarySectionProps {
   noteId: string;
@@ -22,13 +25,41 @@ interface SummarySectionProps {
 
 export function SummarySection({ noteId, initialSummary }: SummarySectionProps) {
   const [summary, setSummary] = useState(initialSummary);
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const aiStatus = useAIStatus();
+
+  // 재생성 함수 정의
+  const regenerationFunction = async (overwrite: boolean) => {
+    return new Promise((resolve) => {
+      startTransition(async () => {
+        try {
+          const result = await generateNoteSummary(noteId, overwrite);
+          resolve(result);
+        } catch (error) {
+          resolve({ success: false, error: error instanceof Error ? error.message : '알 수 없는 오류가 발생했습니다.' });
+        }
+      });
+    });
+  };
+
+  // 재생성 훅 사용
+  const regeneration = useRegeneration('summary', regenerationFunction, {
+    onSuccess: (result) => {
+      if (result.success && result.summary) {
+        setSummary({
+          content: result.summary,
+          createdAt: new Date(),
+        });
+      }
+    },
+    onError: (error) => {
+      console.error('요약 재생성 실패:', error);
+    }
+  });
 
   const handleGenerateSummary = (overwrite: boolean = false) => {
-    setError(null);
-    setIsGenerating(true);
+    aiStatus.reset();
+    aiStatus.startProcessing();
 
     startTransition(async () => {
       try {
@@ -39,6 +70,7 @@ export function SummarySection({ noteId, initialSummary }: SummarySectionProps) 
             content: result.summary!,
             createdAt: new Date(),
           });
+          aiStatus.markSuccess();
         } else {
           if (result.hasExistingSummary) {
             // 기존 요약이 있는 경우 덮어쓰기 확인
@@ -48,21 +80,21 @@ export function SummarySection({ noteId, initialSummary }: SummarySectionProps) 
             if (confirmed) {
               handleGenerateSummary(true);
               return;
+            } else {
+              aiStatus.reset();
             }
           } else {
-            setError(result.error);
+            aiStatus.markError(new Error(result.error));
           }
         }
       } catch (err) {
-        setError('요약 생성 중 오류가 발생했습니다.');
-      } finally {
-        setIsGenerating(false);
+        aiStatus.markError(err);
       }
     });
   };
 
   const handleRegenerateSummary = () => {
-    handleGenerateSummary(true);
+    regeneration.handleRegenerateClick();
   };
 
   const formatSummaryContent = (content: string) => {
@@ -82,10 +114,43 @@ export function SummarySection({ noteId, initialSummary }: SummarySectionProps) 
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        {error && (
+        {/* AI 처리 상태 표시 */}
+        {aiStatus.isLoading && (
+          <div className="flex items-center gap-2 text-sm text-blue-600 bg-blue-50 p-3 rounded-md">
+            <LoaderCircle className="h-4 w-4 animate-spin" />
+            <span>AI가 요약을 생성하고 있습니다...</span>
+          </div>
+        )}
+
+        {aiStatus.isSuccess && (
+          <div className="flex items-center gap-2 text-sm text-green-600 bg-green-50 p-3 rounded-md">
+            <CheckCircle className="h-4 w-4" />
+            <span>요약이 성공적으로 생성되었습니다</span>
+            {aiStatus.processingTime && (
+              <span className="ml-auto flex items-center gap-1 text-xs text-green-500">
+                <Clock className="h-3 w-3" />
+                {aiStatus.processingTime}초
+              </span>
+            )}
+          </div>
+        )}
+
+        {aiStatus.isError && (
           <Alert variant="destructive">
             <AlertCircle className="h-4 w-4" />
-            <AlertDescription>{error}</AlertDescription>
+            <AlertDescription className="flex items-center justify-between">
+              <span>{aiStatus.getErrorMessage()}</span>
+              {aiStatus.canRetry() && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleGenerateSummary()}
+                  className="ml-2 h-6 text-xs"
+                >
+                  재시도
+                </Button>
+              )}
+            </AlertDescription>
           </Alert>
         )}
 
@@ -108,10 +173,10 @@ export function SummarySection({ noteId, initialSummary }: SummarySectionProps) 
                 variant="outline"
                 size="sm"
                 onClick={handleRegenerateSummary}
-                disabled={isGenerating || isPending}
+                disabled={!regeneration.canRegenerate || isPending}
                 className="h-8"
               >
-                {isGenerating || isPending ? (
+                {regeneration.isRegenerating || isPending ? (
                   <LoaderCircle className="h-3 w-3 animate-spin mr-1" />
                 ) : (
                   <RefreshCw className="h-3 w-3 mr-1" />
@@ -128,10 +193,10 @@ export function SummarySection({ noteId, initialSummary }: SummarySectionProps) 
             </p>
             <Button
               onClick={() => handleGenerateSummary()}
-              disabled={isGenerating || isPending}
+              disabled={aiStatus.isProcessing || isPending}
               className="w-full"
             >
-              {isGenerating || isPending ? (
+              {aiStatus.isLoading || isPending ? (
                 <>
                   <LoaderCircle className="h-4 w-4 animate-spin mr-2" />
                   요약 생성 중...
@@ -142,6 +207,36 @@ export function SummarySection({ noteId, initialSummary }: SummarySectionProps) 
             </Button>
           </div>
         )}
+
+        {/* 재생성 확인 다이얼로그 */}
+        <AlertDialog open={regeneration.showOverwriteDialog} onOpenChange={regeneration.cancelOverwrite}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>요약 재생성 확인</AlertDialogTitle>
+              <AlertDialogDescription>
+                이미 요약이 존재합니다. 기존 요약을 덮어쓰시겠습니까?
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel onClick={regeneration.cancelOverwrite}>
+                취소
+              </AlertDialogCancel>
+              <AlertDialogAction 
+                onClick={regeneration.confirmOverwrite}
+                disabled={regeneration.isRegenerating}
+              >
+                {regeneration.isRegenerating ? (
+                  <>
+                    <LoaderCircle className="h-4 w-4 animate-spin mr-2" />
+                    재생성 중...
+                  </>
+                ) : (
+                  '덮어쓰기'
+                )}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </CardContent>
     </Card>
   );
