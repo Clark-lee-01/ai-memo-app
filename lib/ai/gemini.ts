@@ -3,14 +3,16 @@
 // AI 기반 요약 및 태깅 기능을 위한 Gemini API 연동
 // 관련 파일: app/actions/notes.ts, lib/types/notes.ts
 
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { GoogleGenAI } from '@google/genai';
 import { classifyAIError, createErrorContext } from '@/lib/utils/errorHandler';
 import { tokenMonitor } from '@/lib/monitoring/tokenMonitor';
 import { logAIError } from '@/lib/monitoring/errorLogger';
 import { AIError } from '@/lib/types/errors';
 
 // Gemini API 클라이언트 초기화
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
+const genAI = new GoogleGenAI({
+  apiKey: process.env.GEMINI_API_KEY!,
+});
 
 // 토큰 제한 상수 (8k 토큰)
 const MAX_TOKENS = 8000;
@@ -177,21 +179,31 @@ export async function generateContent(
   }
   
   return callGeminiWithRetry(async () => {
-    const model = genAI.getGenerativeModel({ 
+    // @google/genai 패키지의 올바른 API 사용
+    const model = genAI.models.generateContent({
       model: 'gemini-2.5-flash',
+      contents: [{ parts: [{ text: prompt }] }],
       generationConfig: {
         maxOutputTokens: 1000, // 출력 토큰 제한
       }
     });
     
-    const result = await model.generateContent(prompt);
-    const response = await result.response;
+    const result = await model;
     
-    if (!response.text()) {
+    if (!result || !result.candidates || result.candidates.length === 0) {
       throw new GeminiAPIError('API 응답이 비어있습니다', 'EMPTY_RESPONSE');
     }
     
-    const text = response.text();
+    const candidate = result.candidates[0];
+    if (!candidate || !candidate.content || !candidate.content.parts || candidate.content.parts.length === 0) {
+      throw new GeminiAPIError('API 응답이 비어있습니다', 'EMPTY_RESPONSE');
+    }
+    
+    const text = candidate.content.parts[0].text;
+    
+    if (!text || text.trim().length === 0) {
+      throw new GeminiAPIError('API 응답 텍스트가 비어있습니다', 'EMPTY_TEXT');
+    }
     
     // 토큰 사용량 기록
     const estimatedOutputTokens = Math.ceil(text.length / 3.5); // 대략적인 출력 토큰 계산

@@ -14,12 +14,17 @@ import { Badge } from '@/components/ui/badge';
 import { LoaderCircle, CheckCircle, XCircle, RefreshCw } from 'lucide-react';
 
 export default function TestGeminiPage() {
-  const [testText, setTestText] = useState('안녕하세요. 이것은 AI 메모장 프로젝트의 테스트 텍스트입니다. 이 텍스트를 사용하여 Gemini API의 요약 및 태그 생성 기능을 테스트해보겠습니다.');
+  const [testText, setTestText] = useState('인공지능과 머신러닝 기술이 빠르게 발전하고 있습니다. 주요 발전 방향: 1. 딥러닝 모델의 크기와 복잡성이 증가하고 있으며, GPT-4와 같은 대규모 언어 모델이 등장했습니다. 2. 자율주행 자동차 기술이 상용화 단계에 접어들었고, Tesla, Waymo 등이 선도하고 있습니다. 3. 의료 분야에서 AI는 진단 정확도를 크게 향상시키고 있으며, 개인맞춤형 치료가 가능해지고 있습니다. 4. 자연어 처리 기술이 발전하여 ChatGPT, Claude 같은 대화형 AI가 일상생활에 자리잡았습니다. 향후 전망: - AGI(일반인공지능) 달성 가능성이 높아지고 있습니다. - 양자컴퓨팅과 AI의 결합으로 새로운 돌파구가 예상됩니다. - AI 윤리와 규제가 중요한 이슈로 부상하고 있습니다. - 인간과 AI의 협업이 새로운 노동 패러다임을 만들 것입니다.');
   const [summary, setSummary] = useState<string>('');
   const [tags, setTags] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string>('');
-  const [apiStatus, setApiStatus] = useState<{ status: 'healthy' | 'error'; message: string } | null>(null);
+  const [apiStatus, setApiStatus] = useState<{ status: 'healthy' | 'error'; message: string; tokenUsage?: any } | null>(null);
+  const [testResults, setTestResults] = useState<{
+    summaryTime?: number;
+    tagsTime?: number;
+    statusTime?: number;
+  }>({});
 
   const testSummarize = async () => {
     if (!testText.trim()) {
@@ -30,6 +35,7 @@ export default function TestGeminiPage() {
     setIsLoading(true);
     setError('');
     setSummary('');
+    const startTime = Date.now();
 
     try {
       const response = await fetch('/api/test-gemini/summarize', {
@@ -41,9 +47,11 @@ export default function TestGeminiPage() {
       });
 
       const data = await response.json();
+      const endTime = Date.now();
 
       if (data.success) {
         setSummary(data.summary);
+        setTestResults(prev => ({ ...prev, summaryTime: endTime - startTime }));
       } else {
         setError(data.error || '요약 생성에 실패했습니다.');
       }
@@ -63,6 +71,7 @@ export default function TestGeminiPage() {
     setIsLoading(true);
     setError('');
     setTags([]);
+    const startTime = Date.now();
 
     try {
       const response = await fetch('/api/test-gemini/tags', {
@@ -74,9 +83,11 @@ export default function TestGeminiPage() {
       });
 
       const data = await response.json();
+      const endTime = Date.now();
 
       if (data.success) {
         setTags(data.tags);
+        setTestResults(prev => ({ ...prev, tagsTime: endTime - startTime }));
       } else {
         setError(data.error || '태그 생성에 실패했습니다.');
       }
@@ -90,13 +101,16 @@ export default function TestGeminiPage() {
   const testApiStatus = async () => {
     setIsLoading(true);
     setError('');
+    const startTime = Date.now();
 
     try {
       const response = await fetch('/api/test-gemini/status');
       const data = await response.json();
+      const endTime = Date.now();
 
       if (data.success) {
         setApiStatus(data.status);
+        setTestResults(prev => ({ ...prev, statusTime: endTime - startTime }));
       } else {
         setError(data.error || 'API 상태 확인에 실패했습니다.');
       }
@@ -112,6 +126,7 @@ export default function TestGeminiPage() {
     setTags([]);
     setError('');
     setApiStatus(null);
+    setTestResults({});
   };
 
   return (
@@ -141,16 +156,28 @@ export default function TestGeminiPage() {
                 상태 확인
               </Button>
               {apiStatus && (
-                <div className="flex items-center gap-2">
-                  {apiStatus.status === 'healthy' ? (
-                    <CheckCircle className="h-5 w-5 text-green-500" />
-                  ) : (
-                    <XCircle className="h-5 w-5 text-red-500" />
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    {apiStatus.status === 'healthy' ? (
+                      <CheckCircle className="h-5 w-5 text-green-500" />
+                    ) : (
+                      <XCircle className="h-5 w-5 text-red-500" />
+                    )}
+                    <Badge variant={apiStatus.status === 'healthy' ? 'default' : 'destructive'}>
+                      {apiStatus.status === 'healthy' ? '정상' : '오류'}
+                    </Badge>
+                    <span className="text-sm text-gray-600">{apiStatus.message}</span>
+                    {testResults.statusTime && (
+                      <span className="text-xs text-gray-500">({testResults.statusTime}ms)</span>
+                    )}
+                  </div>
+                  {apiStatus.tokenUsage && (
+                    <div className="text-xs text-gray-500 space-y-1">
+                      <div>일간 사용량: {apiStatus.tokenUsage.daily} 토큰</div>
+                      <div>시간당 사용량: {apiStatus.tokenUsage.hourly} 토큰</div>
+                      <div>일간 제한: {apiStatus.tokenUsage.limits.daily} 토큰</div>
+                    </div>
                   )}
-                  <Badge variant={apiStatus.status === 'healthy' ? 'default' : 'destructive'}>
-                    {apiStatus.status === 'healthy' ? '정상' : '오류'}
-                  </Badge>
-                  <span className="text-sm text-gray-600">{apiStatus.message}</span>
                 </div>
               )}
             </div>
@@ -205,6 +232,9 @@ export default function TestGeminiPage() {
               <CardTitle className="flex items-center gap-2">
                 <CheckCircle className="h-5 w-5 text-green-500" />
                 요약 결과
+                {testResults.summaryTime && (
+                  <span className="text-sm text-gray-500 ml-auto">({testResults.summaryTime}ms)</span>
+                )}
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -227,6 +257,9 @@ export default function TestGeminiPage() {
               <CardTitle className="flex items-center gap-2">
                 <CheckCircle className="h-5 w-5 text-green-500" />
                 태그 결과
+                {testResults.tagsTime && (
+                  <span className="text-sm text-gray-500 ml-auto">({testResults.tagsTime}ms)</span>
+                )}
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -244,16 +277,34 @@ export default function TestGeminiPage() {
         {/* 사용법 안내 */}
         <Card>
           <CardHeader>
-            <CardTitle>사용법</CardTitle>
+            <CardTitle>사용법 및 기능</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-2 text-sm text-gray-600">
-            <p>1. <strong>API 상태 확인</strong>: Gemini API 연결 상태를 확인합니다.</p>
-            <p>2. <strong>테스트 텍스트 입력</strong>: 요약하거나 태그를 생성할 텍스트를 입력합니다.</p>
-            <p>3. <strong>요약 생성</strong>: 텍스트의 핵심 내용을 3-6개의 불릿 포인트로 요약합니다.</p>
-            <p>4. <strong>태그 생성</strong>: 텍스트의 주요 키워드를 최대 6개의 태그로 생성합니다.</p>
-            <p className="text-xs text-gray-500 mt-4">
-              * 이 페이지는 개발 환경에서만 사용하세요. 프로덕션에서는 제거해야 합니다.
-            </p>
+          <CardContent className="space-y-3 text-sm text-gray-600">
+            <div>
+              <p className="font-semibold mb-1">1. API 상태 확인</p>
+              <p>• Gemini API 연결 상태 및 토큰 사용량 확인</p>
+              <p>• 응답 시간 측정 및 실시간 모니터링</p>
+            </div>
+            <div>
+              <p className="font-semibold mb-1">2. 요약 생성 테스트</p>
+              <p>• 텍스트를 3-6개의 불릿 포인트로 요약</p>
+              <p>• 처리 시간 측정 및 품질 검증</p>
+            </div>
+            <div>
+              <p className="font-semibold mb-1">3. 태그 생성 테스트</p>
+              <p>• 텍스트의 주요 키워드를 최대 6개 태그로 추출</p>
+              <p>• 관련성 높은 태그 자동 생성</p>
+            </div>
+            <div>
+              <p className="font-semibold mb-1">4. 성능 모니터링</p>
+              <p>• 각 API 호출의 응답 시간 측정</p>
+              <p>• 토큰 사용량 추적 및 제한 관리</p>
+            </div>
+            <div className="bg-yellow-50 p-3 rounded-lg border border-yellow-200">
+              <p className="text-xs text-yellow-800">
+                <strong>주의:</strong> 이 페이지는 개발 환경에서만 사용하세요. 프로덕션에서는 제거해야 합니다.
+              </p>
+            </div>
           </CardContent>
         </Card>
       </div>

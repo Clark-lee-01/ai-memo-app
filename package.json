@@ -16,8 +16,7 @@
     "cleanup": "node scripts/cleanup-expired-notes.js"
   },
   "dependencies": {
-    "@google/genai": "^1.24.0",
-    "@google/generative-ai": "^0.24.1",
+    "@google/genai": "^1.25.0",
     "@hookform/resolvers": "^5.2.2",
     "@radix-ui/react-alert-dialog": "^1.1.15",
     "@radix-ui/react-form": "^0.1.8",

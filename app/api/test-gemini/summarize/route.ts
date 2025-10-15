@@ -18,10 +18,11 @@ export async function POST(request: NextRequest) {
     }
 
     // 텍스트 길이 검증
-    if (!validateTextLength(text)) {
+    const validation = validateTextLength(text);
+    if (!validation.isValid) {
       return NextResponse.json({
         success: false,
-        error: '텍스트가 너무 깁니다. 8k 토큰 이하로 입력해주세요.'
+        error: validation.error || '텍스트가 너무 깁니다. 8k 토큰 이하로 입력해주세요.'
       }, { status: 400 });
     }
 
