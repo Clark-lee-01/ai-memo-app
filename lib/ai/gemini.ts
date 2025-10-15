@@ -182,10 +182,7 @@ export async function generateContent(
     // @google/genai 패키지의 올바른 API 사용
     const model = genAI.models.generateContent({
       model: 'gemini-2.5-flash',
-      contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: {
-        maxOutputTokens: 1000, // 출력 토큰 제한
-      }
+      contents: [{ parts: [{ text: prompt }] }]
     });
     
     const result = await model;

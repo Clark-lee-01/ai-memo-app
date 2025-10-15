@@ -19,7 +19,7 @@ export default function TestGeminiPage() {
   const [tags, setTags] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string>('');
-  const [apiStatus, setApiStatus] = useState<{ status: 'healthy' | 'error'; message: string; tokenUsage?: any } | null>(null);
+  const [apiStatus, setApiStatus] = useState<{ status: 'healthy' | 'error'; message: string; tokenUsage?: { daily: number; hourly: number; limits: { daily: number; monthly: number } } } | null>(null);
   const [testResults, setTestResults] = useState<{
     summaryTime?: number;
     tagsTime?: number;
@@ -55,7 +55,7 @@ export default function TestGeminiPage() {
       } else {
         setError(data.error || '요약 생성에 실패했습니다.');
       }
-    } catch (err) {
+    } catch {
       setError('요약 생성 중 오류가 발생했습니다.');
     } finally {
       setIsLoading(false);
@@ -91,7 +91,7 @@ export default function TestGeminiPage() {
       } else {
         setError(data.error || '태그 생성에 실패했습니다.');
       }
-    } catch (err) {
+    } catch {
       setError('태그 생성 중 오류가 발생했습니다.');
     } finally {
       setIsLoading(false);
@@ -114,7 +114,7 @@ export default function TestGeminiPage() {
       } else {
         setError(data.error || 'API 상태 확인에 실패했습니다.');
       }
-    } catch (err) {
+    } catch {
       setError('API 상태 확인 중 오류가 발생했습니다.');
     } finally {
       setIsLoading(false);
